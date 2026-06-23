@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   // Keep the headless-Chromium packages out of the bundler so their native
   // binaries are loaded at runtime instead of being traced/bundled.
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core", "puppeteer"],
+  // Externalizing alone drops the brotli-compressed Chromium binary from the
+  // function bundle. Force it back into the /api/analyze function's file trace.
+  outputFileTracingIncludes: {
+    "/api/analyze": ["./node_modules/@sparticuz/chromium/bin/**"],
+  },
 };
 
 export default nextConfig;
