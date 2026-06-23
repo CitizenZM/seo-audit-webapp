@@ -245,16 +245,18 @@ function DashboardContent() {
             </div>
           </div>
 
-          <div className="md:col-span-2">
-            {/* The Detailed Title Tags Component from AI generator */}
-            <TitleTagsOptimizer titleTags={data.synthesis.titleTags} />
-          </div>
+          {data.synthesis?.titleTags && (
+            <div className="md:col-span-2">
+              {/* The Detailed Title Tags Component from AI generator */}
+              <TitleTagsOptimizer titleTags={data.synthesis.titleTags} />
+            </div>
+          )}
 
         </div>
 
         {/* Action Plan Board & Content Calendar - Full Width Bottom */}
         <div className="max-w-6xl mx-auto mt-8">
-           <ContentCalendar calendar={data.synthesis.contentCalendar} />
+           {data.synthesis?.contentCalendar && <ContentCalendar calendar={data.synthesis.contentCalendar} />}
            <ActionPlanBoard data={data} />
         </div>
       </section>

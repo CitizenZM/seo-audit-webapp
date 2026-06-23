@@ -9,9 +9,19 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^149.0.0",
+    "chart.js": "^4.5.1",
+    "cheerio": "^1.2.0",
+    "dotenv": "^17.3.1",
+    "lucide-react": "^0.577.0",
     "next": "16.1.6",
+    "openai": "^6.27.0",
+    "puppeteer": "^24.39.0",
+    "puppeteer-core": "^25.2.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "19.2.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
