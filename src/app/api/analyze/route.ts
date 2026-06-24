@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 import { launchBrowser } from '@/lib/browser';
 import { generateSynthesis } from '@/lib/synthesis';
+import { fetchSerp } from '@/lib/serp';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -338,9 +339,16 @@ export async function GET(request: Request) {
       })),
     });
 
+    // Live SERP intelligence (#4) — real Google results for the primary keyword.
+    const serpQuery =
+      synthesis?.keywordOpportunities?.[0]?.keyword ||
+      mainAnalysis.onPage.title?.split(/[|\-–—]/)[0]?.trim() ||
+      mainAnalysis.domain;
+    const serp = await fetchSerp(serpQuery);
+
     return NextResponse.json({
       success: true,
-      data: { ...mainAnalysis, synthesis, siteCrawl },
+      data: { ...mainAnalysis, synthesis, siteCrawl, serp },
       competitors,
     });
   } catch (error) {

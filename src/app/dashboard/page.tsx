@@ -2,11 +2,12 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Hash, Gauge } from 'lucide-react';
+import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Hash, Gauge, Search } from 'lucide-react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import StatCard from './StatCard';
 import { saveAudit } from '@/lib/history';
+import EmailReport from './EmailReport';
 import ActionPlanBoard from './ActionPlanBoard';
 import RadarChart from './RadarChart';
 import TitleTagsOptimizer from './TitleTagsOptimizer';
@@ -348,6 +349,55 @@ function DashboardContent() {
             </div>
           )}
 
+          {/* Live SERP Intelligence (#4) */}
+          {data.serp && data.serp.organic?.length > 0 && (
+            <div className="md:col-span-2 card p-6">
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
+                  <Search size={18} className="text-[var(--brand)]" /> Live SERP — who ranks for &ldquo;{data.serp.query}&rdquo;
+                </h3>
+                <span className="text-[10px] uppercase tracking-wider text-[var(--ink-3)] bg-[var(--surface-2)] px-2 py-0.5 rounded">via {data.serp.source}</span>
+              </div>
+              <p className="text-sm text-[var(--ink-3)] mb-4">Real Google results — these are the pages you compete with for your primary keyword.</p>
+              <ol className="flex flex-col gap-2 mb-5">
+                {data.serp.organic.slice(0, 10).map((r: { title: string; url: string; domain: string }, i: number) => {
+                  const isYou = r.domain && data.domain.replace(/^www\./, '').includes(r.domain);
+                  return (
+                    <li key={i} className={`flex items-start gap-3 p-3 rounded-lg border ${isYou ? 'border-[var(--brand)] bg-[var(--brand-soft)]' : 'border-[var(--border)] bg-[var(--surface-2)]'}`}>
+                      <span className="text-sm font-bold text-[var(--ink-3)] w-5 shrink-0">{i + 1}</span>
+                      <div className="min-w-0">
+                        <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-[var(--blue)] hover:underline truncate block">{r.title || r.url}</a>
+                        <span className="text-xs text-[var(--ink-3)]">{r.domain}{isYou ? ' · You' : ''}</span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {data.serp.peopleAlsoAsk?.length > 0 && (
+                  <div>
+                    <div className="text-xs uppercase tracking-wider font-semibold text-[var(--ink-3)] mb-2">People Also Ask</div>
+                    <ul className="flex flex-col gap-1.5">
+                      {data.serp.peopleAlsoAsk.map((q: string, i: number) => (
+                        <li key={i} className="text-sm text-[var(--ink-2)] flex gap-2"><span className="text-[var(--brand)]">?</span>{q}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {data.serp.relatedSearches?.length > 0 && (
+                  <div>
+                    <div className="text-xs uppercase tracking-wider font-semibold text-[var(--ink-3)] mb-2">Related Searches</div>
+                    <div className="flex flex-wrap gap-2">
+                      {data.serp.relatedSearches.map((q: string, i: number) => (
+                        <span key={i} className="text-xs px-2.5 py-1 rounded-full bg-[var(--surface-2)] border border-[var(--border)] text-[var(--ink-2)]">{q}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Keyword Opportunities */}
           {data.synthesis?.keywordOpportunities && (
             <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
@@ -400,6 +450,7 @@ function DashboardContent() {
           <section className="flex flex-col gap-5">
             {data.synthesis?.contentCalendar && <ContentCalendar calendar={data.synthesis.contentCalendar} />}
             <ActionPlanBoard data={data} />
+            <EmailReport url={data.url} domain={data.domain} score={data.technical.mobileSpeedScore} />
           </section>
         </main>
       </div>
