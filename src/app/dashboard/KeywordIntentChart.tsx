@@ -36,14 +36,14 @@ export default function KeywordIntentChart({ keywords }: { keywords: any[] }) {
     plugins: {
       legend: {
         position: 'bottom' as const,
-        labels: { color: '#ccc', font: { size: 11 }, padding: 16 }
+        labels: { color: '#5b6170', font: { size: 11 }, padding: 16 }
       }
     }
   };
 
   return (
-    <div className="bg-[var(--mid)] border border-[#2a2a4a] rounded-xl p-6 h-full flex flex-col justify-center items-center">
-      <h3 className="text-lg font-bold text-white mb-6 w-full text-left">Keyword Intent Mix</h3>
+    <div className="card p-6 h-full flex flex-col justify-center items-center">
+      <h3 className="text-base font-bold text-[var(--ink)] mb-6 w-full text-left">Keyword Intent Mix</h3>
       <div className="w-full max-w-[280px]">
         <Doughnut data={data} options={options} />
       </div>

@@ -1,38 +1,105 @@
 @import "tailwindcss";
 
 :root {
-  --gold: #C9A84C;
-  --dark: #1a1a2e;
-  --mid: #16213e;
-  --card: #0f3460;
-  --accent: #e94560;
-  --green: #2ecc71;
-  --yellow: #f39c12;
-  --red: #e74c3c;
-  --blue: #3498db;
-  --text: #eee;
-  --muted: #aaa;
-  --pass: #27ae60;
-  --warn: #f39c12;
-  --fail: #e74c3c;
+  /* ===== Light design system (references: Cemdash / Donezo / Salesforce-one) ===== */
+  --bg: #f5f6f8;          /* app canvas */
+  --surface: #ffffff;     /* cards */
+  --surface-2: #f9fafb;   /* subtle inset */
+  --border: #ecedf1;      /* hairline borders */
+  --border-strong: #e2e4ea;
+
+  --ink: #14151a;         /* primary text */
+  --ink-2: #5b6170;       /* secondary text */
+  --ink-3: #8a90a0;       /* muted / labels */
+
+  --brand: #16a34a;       /* primary accent (green, Donezo-style) */
+  --brand-soft: #e7f6ec;
+  --brand-ink: #0f7a37;
+
+  --blue: #3b82f6;
+  --blue-soft: #e8f0fe;
+  --amber: #f59e0b;
+  --amber-soft: #fef3e2;
+  --red: #ef4444;
+  --red-soft: #fdecec;
+
+  /* status */
+  --pass: #16a34a;
+  --warn: #f59e0b;
+  --fail: #ef4444;
+
+  /* gold kept as a subtle premium accent, no longer the base */
+  --gold: #c9a84c;
+
+  /* ===== Legacy aliases (so older dark components still render readably) ===== */
+  --dark: var(--bg);
+  --mid: var(--surface);
+  --card: var(--surface);
+  --accent: var(--brand);
+  --green: var(--pass);
+  --yellow: var(--warn);
+  --text: var(--ink);
+  --muted: var(--ink-3);
+
+  --radius: 0.875rem;     /* rounded-xl baseline */
+  --shadow-sm: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06);
+  --shadow-md: 0 2px 8px rgba(16,24,40,0.06), 0 8px 24px rgba(16,24,40,0.05);
 }
 
 @theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-brand: var(--brand);
+  --color-blue: var(--blue);
+  --color-amber: var(--amber);
+  --color-red: var(--red);
   --color-gold: var(--gold);
+  /* legacy */
   --color-dark: var(--dark);
   --color-mid: var(--mid);
   --color-card: var(--card);
   --color-accent: var(--accent);
   --color-green: var(--green);
   --color-yellow: var(--yellow);
-  --color-red: var(--red);
-  --color-blue: var(--blue);
   --color-text: var(--text);
   --color-muted: var(--muted);
 }
 
 body {
-  background: var(--dark);
-  color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* shared card primitive */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+/* skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #eceef2 25%, #f4f5f8 37%, #eceef2 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* Print / Export-to-PDF (#6): drop chrome, expand content full width */
+@media print {
+  aside, header, .no-print { display: none !important; }
+  body { background: #fff; }
+  main { max-width: 100% !important; padding: 0 !important; }
+  .card { box-shadow: none !important; border-color: #ddd !important; break-inside: avoid; }
 }

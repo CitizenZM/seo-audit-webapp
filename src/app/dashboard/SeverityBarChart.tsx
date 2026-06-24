@@ -46,12 +46,12 @@ export default function SeverityBarChart({ issues }: SeverityBarChartProps) {
     },
     scales: {
       y: {
-        grid: { color: 'rgba(255, 255, 255, 0.07)' },
-        ticks: { color: '#aaa', stepSize: 1 },
+        grid: { color: 'rgba(20, 21, 26, 0.06)' },
+        ticks: { color: '#8a90a0', stepSize: 1 },
       },
       x: {
         grid: { display: false },
-        ticks: { color: '#ccc', font: { size: 12 } },
+        ticks: { color: '#5b6170', font: { size: 12 } },
       },
     },
   };

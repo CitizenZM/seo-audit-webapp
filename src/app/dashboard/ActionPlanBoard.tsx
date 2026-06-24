@@ -46,16 +46,16 @@ export default function ActionPlanBoard({ data }: { data: any }) {
   const strategic = actions.filter(a => a.priority !== 'Critical').slice(0, 6);
 
   return (
-    <div className="bg-[var(--mid)] border border-[#2a2a4a] rounded-xl overflow-hidden mt-6 mb-12">
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden mt-6 mb-12">
       
       {/* 1. On-Page Issues Table View */}
-      <div className="px-6 border-b border-[#2a2a4a]">
+      <div className="px-6 border-b border-[var(--border)]">
          <OnPageIssuesTable issues={issuesList} />
       </div>
 
-      <div className="p-6 border-b border-[#2a2a4a] flex justify-between items-center bg-[rgba(201,168,76,0.05)]">
+      <div className="p-6 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface-2)]">
         <div>
-           <h3 className="text-xl font-bold text-[var(--gold)] flex items-center gap-2">
+           <h3 className="text-xl font-bold text-[var(--brand-ink)] flex items-center gap-2">
              <AlertOctagon size={20} /> Prioritized Action Plan
            </h3>
            <p className="text-sm text-[var(--muted)] mt-1">Consolidated checklist derived from Technical, On-Page, and Content Gap analyses.</p>
@@ -66,17 +66,17 @@ export default function ActionPlanBoard({ data }: { data: any }) {
         {actions.length === 0 ? (
            <div className="p-8 text-center text-[var(--pass)] font-bold">Incredible! No immediate technical or on-page issues detected!</div>
         ) : (
-           <ul className="divide-y divide-[#1e1e3a]">
+           <ul className="divide-y divide-[var(--border)]">
              {actions.sort((a,b) => {
                const pMap:any = { 'Critical': 4, 'High': 3, 'Strategic': 2, 'Medium': 1 };
                return pMap[b.priority] - pMap[a.priority];
              }).map((action, idx) => (
-               <li key={idx} className="p-5 flex items-start gap-4 hover:bg-white/5 transition-colors group">
+               <li key={idx} className="p-5 flex items-start gap-4 hover:bg-[var(--surface-2)] transition-colors group">
                  <div className="mt-1">
                    {action.priority === 'Critical' && <AlertCircle className="text-[var(--fail)]" size={20}/>}
                    {action.priority === 'High' && <AlertTriangle className="text-[var(--warn)]" size={20}/>}
                    {action.priority === 'Medium' && <CheckCircle2 className="text-[var(--blue)]" size={20}/>}
-                   {action.priority === 'Strategic' && <CheckCircle2 className="text-[var(--gold)]" size={20}/>}
+                   {action.priority === 'Strategic' && <CheckCircle2 className="text-[var(--brand-ink)]" size={20}/>}
                  </div>
                  <div className="flex-1">
                    <div className="flex items-center gap-3 mb-1">
@@ -84,12 +84,12 @@ export default function ActionPlanBoard({ data }: { data: any }) {
                         ${action.priority === 'Critical' ? 'bg-[rgba(231,76,60,0.1)] text-[#e74c3c] border-[#e74c3c]/30' : 
                           action.priority === 'High' ? 'bg-[rgba(243,156,18,0.1)] text-[#f39c12] border-[#f39c12]/30' : 
                           action.priority === 'Strategic' ? 'bg-[rgba(201,168,76,0.1)] text-[#C9A84C] border-[#C9A84C]/30' : 
-                          'bg-[rgba(52,152,219,0.1)] text-[#3498db] border-[#3498db]/30'}`}>
+                          'bg-[rgba(52,152,219,0.1)] text-[var(--blue)] border-[#3498db]/30'}`}>
                        {action.priority}
                      </span>
                      <span className="text-xs text-[var(--muted)] capitalize">{action.type}</span>
                    </div>
-                   <p className="text-md text-white group-hover:text-[var(--gold)] transition-colors">{action.text}</p>
+                   <p className="text-md text-[var(--ink)] group-hover:text-[var(--brand-ink)] transition-colors">{action.text}</p>
                  </div>
                </li>
              ))}

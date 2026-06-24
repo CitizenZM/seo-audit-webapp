@@ -31,9 +31,9 @@ export default function RadarChart({ scores }: RadarChartProps) {
       {
         label: 'Tote&Carry',
         data: [scores.onPage, scores.technical, scores.content, scores.links, scores.keywords, scores.schema],
-        backgroundColor: 'rgba(201, 168, 76, 0.15)',
-        borderColor: '#C9A84C',
-        pointBackgroundColor: '#C9A84C',
+        backgroundColor: 'rgba(22, 163, 74, 0.12)',
+        borderColor: '#16a34a',
+        pointBackgroundColor: '#16a34a',
         borderWidth: 2,
       },
     ],
@@ -45,9 +45,10 @@ export default function RadarChart({ scores }: RadarChartProps) {
       r: {
         min: 0,
         max: 100,
-        grid: { color: 'rgba(255, 255, 255, 0.1)' },
-        pointLabels: { color: '#ccc', font: { size: 11 } },
-        ticks: { color: '#888', backdropColor: 'transparent', stepSize: 25 },
+        grid: { color: 'rgba(20, 21, 26, 0.08)' },
+        angleLines: { color: 'rgba(20, 21, 26, 0.08)' },
+        pointLabels: { color: '#5b6170', font: { size: 11 } },
+        ticks: { color: '#8a90a0', backdropColor: 'transparent', stepSize: 25 },
       },
     },
     plugins: {

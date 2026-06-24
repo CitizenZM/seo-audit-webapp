@@ -2,7 +2,11 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertCircle, CheckCircle2, XCircle, LayoutDashboard, Globe, Zap, Target } from 'lucide-react';
+import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Hash, Gauge } from 'lucide-react';
+import Sidebar from './Sidebar';
+import TopBar from './TopBar';
+import StatCard from './StatCard';
+import { saveAudit } from '@/lib/history';
 import ActionPlanBoard from './ActionPlanBoard';
 import RadarChart from './RadarChart';
 import TitleTagsOptimizer from './TitleTagsOptimizer';
@@ -23,10 +27,15 @@ function DashboardContent() {
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [step, setStep] = useState(0); // staged progress (#2)
 
   useEffect(() => {
     if (!targetUrl) return;
-    
+
+    // Advance the visible progress steps while the audit runs (#2).
+    const STEPS = 4;
+    const timer = setInterval(() => setStep((s) => (s < STEPS - 1 ? s + 1 : s)), 2500);
+
     let apiUrl = `/api/analyze?url=${encodeURIComponent(targetUrl)}`;
     if (competitorsParam) apiUrl += `&competitors=${encodeURIComponent(competitorsParam)}`;
 
@@ -36,9 +45,21 @@ function DashboardContent() {
         if (res.error) throw new Error(res.error);
         setData(res.data);
         setCompetitors(res.competitors || []);
+        // Persist to local history for trend comparison (#1).
+        try {
+          saveAudit({
+            url: res.data.url,
+            domain: res.data.domain,
+            score: res.data.technical?.mobileSpeedScore ?? 0,
+            competitors: (res.competitors || []).length,
+            timestamp: Date.now(),
+          });
+        } catch { /* non-fatal */ }
       })
       .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+      .finally(() => { clearInterval(timer); setLoading(false); });
+
+    return () => clearInterval(timer);
   }, [targetUrl, competitorsParam]);
 
   if (!targetUrl) {
@@ -47,18 +68,54 @@ function DashboardContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 pb-32">
-        <div className="w-16 h-16 border-4 border-[rgba(201,168,76,0.2)] border-t-[var(--gold)] rounded-full animate-spin mb-6"></div>
-        <h2 className="text-xl font-bold text-[var(--gold)] animate-pulse">Running Analysis Engine...</h2>
-        <p className="text-[#aaa] mt-2">Crawling {targetUrl}</p>
+      <div className="flex min-h-screen bg-[var(--bg)]">
+        <Sidebar active="overview" domain={new URL(targetUrl).hostname} />
+        <div className="flex-1 min-w-0">
+          <TopBar url={targetUrl} />
+          <main className="p-6 max-w-[1200px] mx-auto">
+            <div className="mb-4">
+              <div className="text-sm text-[var(--ink-2)] flex items-center gap-2 mb-3">
+                <span className="w-2 h-2 rounded-full bg-[var(--brand)] animate-pulse" />
+                Running analysis engine — {new URL(targetUrl).hostname}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {['Crawl site & sitemap', 'Analyze competitors', 'Check speed & UX', 'AI synthesis'].map((label, i) => (
+                  <span
+                    key={label}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      i < step ? 'bg-[var(--brand-soft)] text-[var(--brand-ink)] border-transparent'
+                      : i === step ? 'bg-[var(--surface)] text-[var(--ink)] border-[var(--brand)]'
+                      : 'bg-[var(--surface)] text-[var(--ink-3)] border-[var(--border)]'
+                    }`}
+                  >
+                    {i < step ? '✓ ' : i === step ? '● ' : ''}{label}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mt-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="card p-5">
+                  <div className="skeleton h-9 w-9 mb-4" />
+                  <div className="skeleton h-7 w-24 mb-3" />
+                  <div className="skeleton h-4 w-32" />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+              <div className="card p-6"><div className="skeleton h-5 w-48 mb-5" />{[0,1,2,3].map(i=> <div key={i} className="skeleton h-4 w-full mb-3" />)}</div>
+              <div className="card p-6"><div className="skeleton h-5 w-48 mb-5" />{[0,1,2].map(i=> <div key={i} className="skeleton h-4 w-full mb-3" />)}</div>
+            </div>
+          </main>
+        </div>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        <div className="bg-[#e74c3c]/10 text-[#e74c3c] border border-[#e74c3c]/30 p-6 rounded-lg flex items-center gap-4 max-w-lg">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg)]">
+        <div className="card bg-[var(--red-soft)] text-[var(--red)] border-[var(--red)]/20 p-6 flex items-center gap-4 max-w-lg">
           <XCircle size={32} />
           <div>
             <h3 className="font-bold text-lg">Analysis Failed</h3>
@@ -69,141 +126,227 @@ function DashboardContent() {
     );
   }
 
+  const totalLinks = data.links.internalCount + data.links.externalCount;
+
   return (
-    <div className="min-h-screen">
-      <nav className="sticky top-0 z-50 bg-[var(--mid)] border-b-2 border-[var(--gold)] px-8 py-4 flex justify-between items-center shadow-lg">
-        <div className="font-bold text-[var(--gold)] flex items-center gap-2 tracking-wide text-lg">
-          <LayoutDashboard size={20} />
-          SEO REPORT 2026
-        </div>
-        <div className="text-[var(--muted)] text-sm">{data.domain}</div>
-      </nav>
+    <div className="flex min-h-screen bg-[var(--bg)]">
+      <Sidebar active="overview" domain={data.domain} />
 
-      {/* Hero Header */}
-      <section className="bg-gradient-to-br from-[#1a1a2e] to-[#0f3460] border-b border-[#222] pt-12 pb-10 px-8">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-extrabold text-[var(--gold)] mb-2">Full SEO Audit & Action Plan</h1>
-          <p className="text-[var(--muted)] text-sm mb-8 flex items-center gap-2">
-            <Globe size={14} /> {data.url}
-          </p>
+      <div className="flex-1 min-w-0">
+        <TopBar url={data.url} />
 
-          <div className="flex flex-wrap gap-5">
-            <div className="bg-white/5 border border-[rgba(201,168,76,0.3)] rounded-xl py-5 px-6 min-w-[160px] backdrop-blur-sm">
-              <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold mb-1">On-Page Links</div>
-              <div className="text-3xl font-black text-[var(--gold)]">{data.links.internalCount + data.links.externalCount}</div>
-            </div>
-            <div className="bg-white/5 border border-[rgba(201,168,76,0.3)] rounded-xl py-5 px-6 min-w-[160px] backdrop-blur-sm">
-              <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold mb-1">Words Content</div>
-              <div className="text-3xl font-black text-[var(--gold)]">{data.onPage.wordCount}</div>
-            </div>
-            <div className="bg-white/5 border border-[rgba(201,168,76,0.3)] rounded-xl py-5 px-6 min-w-[160px] backdrop-blur-sm">
-              <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold mb-1">H1 Tags</div>
-              <div className="text-3xl font-black text-[var(--gold)]">{data.onPage.h1Count}</div>
-            </div>
-          </div>
-        </div>
-      </section>
+        <main className="p-6 max-w-[1200px] mx-auto flex flex-col gap-5">
+          {/* KPI Row */}
+          <section id="overview" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 scroll-mt-20">
+            <StatCard label="Mobile Speed" value={`${data.technical.mobileSpeedScore}/100`} icon={Gauge}
+              tone={data.technical.mobileSpeedScore > 80 ? 'brand' : data.technical.mobileSpeedScore > 50 ? 'amber' : 'red'} />
+            <StatCard label="On-Page Links" value={totalLinks} icon={Link2} tone="blue" />
+            <StatCard label="Words of Content" value={data.onPage.wordCount.toLocaleString()} icon={FileText} tone="brand" />
+            <StatCard label="H1 Tags" value={data.onPage.h1Count} icon={Hash} tone="amber" />
+          </section>
 
-      {/* Executive Summary from AI Synthesis */}
-      {data.synthesis && (
-        <section className="py-8 px-8 bg-[#1a1a2e] border-b border-[#222]">
-           <div className="max-w-6xl mx-auto">
-             <div className="bg-[rgba(201,168,76,0.08)] border border-[rgba(201,168,76,0.3)] rounded-xl p-6 mb-6">
-                <h2 className="text-xl font-bold text-[var(--gold)] mb-3">Executive Summary</h2>
-                <p className="text-[#ddd] text-[0.95rem] leading-relaxed">{data.synthesis.executiveSummary}</p>
-             </div>
-             
-             <div className="bg-[rgba(231,76,60,0.1)] border border-[rgba(231,76,60,0.3)] rounded-xl p-5 mb-8">
-                <div className="text-[10px] text-[var(--red)] uppercase tracking-wider font-bold mb-1 flex items-center gap-2"><Target size={14}/> Top Priority Action</div>
-                <p className="text-white font-semibold text-lg">{data.synthesis.topPriority}</p>
-             </div>
+          {/* Executive Summary from AI Synthesis */}
+          {data.synthesis && (
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <div className="card p-6 lg:col-span-2">
+                <h2 className="text-base font-bold text-[var(--ink)] mb-3 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand)]" /> Executive Summary
+                </h2>
+                <p className="text-[var(--ink-2)] text-[0.95rem] leading-relaxed">{data.synthesis.executiveSummary}</p>
 
-             {/* SEO Health Radar Chart overlaying Hero section */}
-             {data.synthesis.topCategoryScores && (
-               <div className="bg-[var(--mid)] border border-[#2a2a4a] rounded-xl p-8 mb-8 max-w-lg mx-auto">
-                 <h3 className="text-lg font-bold text-center text-[var(--gold)] mb-4">SEO Health by Category</h3>
-                 <RadarChart scores={data.synthesis.topCategoryScores} />
-               </div>
-             )}
+                <div className="mt-5 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/15 p-4">
+                  <div className="text-[10px] text-[var(--red)] uppercase tracking-wider font-bold mb-1 flex items-center gap-2"><Target size={13} /> Top Priority Action</div>
+                  <p className="text-[var(--ink)] font-semibold">{data.synthesis.topPriority}</p>
+                </div>
+              </div>
 
-             <h3 className="text-lg font-bold text-white mb-4">Content Gap Recommendation</h3>
-             {data.synthesis.contentGapBrief && (
-               <div className="bg-[var(--mid)] border border-[#2a2a4a] rounded-xl p-6 mb-8">
-                 <div className="mb-4">
-                   <span className="bg-[rgba(52,152,219,0.15)] text-[#3498db] border border-[rgba(52,152,219,0.3)] text-xs px-3 py-1 rounded-full uppercase font-bold tracking-wide">Suggested Post</span>
-                   <h4 className="text-xl font-bold text-white mt-3">{data.synthesis.contentGapBrief.title}</h4>
-                   <p className="text-[#aaa] text-sm italic mt-1">{data.synthesis.contentGapBrief.rationale}</p>
-                 </div>
-                 <div className="bg-black/20 border-l-2 border-[var(--gold)] p-4 rounded-r-lg">
-                   <h6 className="text-xs uppercase text-[var(--gold)] font-bold mb-2">Suggested Outline:</h6>
-                   <ul className="list-none space-y-2">
-                     {data.synthesis.contentGapBrief.outline?.map((h2: string, idx: number) => (
-                       <li key={idx} className="text-sm text-[#ddd] flex items-center gap-2">
-                         <span className="text-[var(--gold)] text-lg leading-none">→</span> {h2}
-                       </li>
-                     ))}
-                   </ul>
-                 </div>
-               </div>
-             )}
+              {data.synthesis.topCategoryScores && (
+                <div className="card p-6">
+                  <h3 className="text-base font-bold text-center text-[var(--ink)] mb-2">SEO Health by Category</h3>
+                  <RadarChart scores={data.synthesis.topCategoryScores} />
+                </div>
+              )}
+            </section>
+          )}
 
-             {/* Render the full Content Briefs Array from AI */}
-             <ContentBriefs briefs={data.synthesis.contentBriefs} />
-           </div>
-        </section>
-      )}
+          {/* Content Gap + Briefs */}
+          {data.synthesis && (
+            <section className="flex flex-col gap-5">
+              {data.synthesis.contentGapBrief && (
+                <div className="card p-6">
+                  <span className="bg-[var(--blue-soft)] text-[var(--blue)] text-xs px-3 py-1 rounded-full uppercase font-bold tracking-wide">Suggested Post</span>
+                  <h4 className="text-lg font-bold text-[var(--ink)] mt-3">{data.synthesis.contentGapBrief.title}</h4>
+                  <p className="text-[var(--ink-3)] text-sm italic mt-1">{data.synthesis.contentGapBrief.rationale}</p>
+                  <div className="mt-4 bg-[var(--surface-2)] border-l-2 border-[var(--brand)] p-4 rounded-r-lg">
+                    <h6 className="text-xs uppercase text-[var(--brand-ink)] font-bold mb-2">Suggested Outline</h6>
+                    <ul className="list-none space-y-2">
+                      {data.synthesis.contentGapBrief.outline?.map((h2: string, idx: number) => (
+                        <li key={idx} className="text-sm text-[var(--ink-2)] flex items-center gap-2">
+                          <span className="text-[var(--brand)] text-lg leading-none">→</span> {h2}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+              <ContentBriefs briefs={data.synthesis.contentBriefs} />
+            </section>
+          )}
 
-      {/* Main Content Grid */}
-      <section className="py-12 px-8">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
-          
+          {/* Technical + CRO Grid */}
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
           {/* Technical Health */}
-          <div className="bg-[var(--mid)] border border-[#2a2a4a] rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Zap size={18} className="text-[var(--blue)]" /> Technical & Performance
+          <div id="technical" className="card p-6 scroll-mt-20">
+            <h3 className="text-base font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
+              <Zap size={18} className="text-[var(--blue)]" /> Technical &amp; Performance
             </h3>
-            <div className="flex flex-col gap-3">
-              <div className="flex justify-between items-center py-2 border-b border-[#2a2a4a]">
-                <span className="text-sm text-[#ddd]">Lighthouse Mobile Speed</span>
+            <div className="flex flex-col">
+              <div className="flex justify-between items-center py-2.5 border-b border-[var(--border)]">
+                <span className="text-sm text-[var(--ink-2)]">Lighthouse Mobile Speed</span>
                 <span className={`text-sm font-bold ${data.technical.mobileSpeedScore > 80 ? 'text-[var(--pass)]' : data.technical.mobileSpeedScore > 50 ? 'text-[var(--warn)]' : 'text-[var(--fail)]'}`}>
                    {data.technical.mobileSpeedScore} / 100
                 </span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-[#2a2a4a]">
-                <span className="text-sm text-[#ddd]">HTTPS Secure</span>
+              <div className="flex justify-between items-center py-2.5 border-b border-[var(--border)]">
+                <span className="text-sm text-[var(--ink-2)]">HTTPS Secure</span>
                 {data.technical.isHttps ? <CheckCircle2 size={18} className="text-[var(--pass)]" /> : <XCircle size={18} className="text-[var(--fail)]" />}
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-[#2a2a4a]">
-                <span className="text-sm text-[#ddd]">Robots.txt Present</span>
+              <div className="flex justify-between items-center py-2.5 border-b border-[var(--border)]">
+                <span className="text-sm text-[var(--ink-2)]">Robots.txt Present</span>
                 {data.technical.hasRobotsTxt ? <CheckCircle2 size={18} className="text-[var(--pass)]" /> : <AlertCircle size={18} className="text-[var(--warn)]" />}
               </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-[#ddd]">Sitemap.xml Found</span>
+              <div className="flex justify-between items-center py-2.5">
+                <span className="text-sm text-[var(--ink-2)]">Sitemap.xml Found</span>
                 {data.technical.hasSitemapXml ? <CheckCircle2 size={18} className="text-[var(--pass)]" /> : <AlertCircle size={18} className="text-[var(--warn)]" />}
               </div>
             </div>
           </div>
 
           {/* CRO Signals */}
-          <div className="bg-[var(--mid)] border border-[#2a2a4a] rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Target size={18} className="text-[var(--accent)]" /> CRO / UX Signals
+          <div className="card p-6">
+            <h3 className="text-base font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
+              <Target size={18} className="text-[var(--brand)]" /> CRO / UX Signals
             </h3>
-            <div className="flex flex-col gap-3">
-              <div className="flex justify-between items-center py-2 border-b border-[#2a2a4a]">
-                <span className="text-sm text-[#ddd]">Cart / Checkout Detected</span>
-                {data.cro.hasCartOrCheckout ? <CheckCircle2 size={18} className="text-[var(--pass)]" /> : <span className="text-xs text-[var(--muted)] px-2 py-1 bg-white/5 rounded">Not Found/Unknown</span>}
+            <div className="flex flex-col">
+              <div className="flex justify-between items-center py-2.5 border-b border-[var(--border)]">
+                <span className="text-sm text-[var(--ink-2)]">Cart / Checkout Detected</span>
+                {data.cro.hasCartOrCheckout ? <CheckCircle2 size={18} className="text-[var(--pass)]" /> : <span className="text-xs text-[var(--ink-3)] px-2 py-1 bg-[var(--surface-2)] rounded">Not Found</span>}
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-[#2a2a4a]">
-                <span className="text-sm text-[#ddd]">Review / Rating Schema</span>
+              <div className="flex justify-between items-center py-2.5 border-b border-[var(--border)]">
+                <span className="text-sm text-[var(--ink-2)]">Review / Rating Schema</span>
                 {data.cro.hasReviewsSchema ? <CheckCircle2 size={18} className="text-[var(--pass)]" /> : <XCircle size={18} className="text-[var(--fail)]" />}
               </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-[#ddd]">Image Alt Tag Coverage</span>
-                <span className="text-sm font-mono text-[var(--gold)]">{data.onPage.imageAltCoverage}</span>
+              <div className="flex justify-between items-center py-2.5">
+                <span className="text-sm text-[var(--ink-2)]">Image Alt Tag Coverage</span>
+                <span className="text-sm font-mono font-semibold text-[var(--brand-ink)]">{data.onPage.imageAltCoverage}</span>
               </div>
             </div>
           </div>
+
+          {/* Core Web Vitals (#5) */}
+          {data.technical.cwv && (data.technical.cwv.lcp || data.technical.cwv.cls) && (
+            <div className="card p-6">
+              <h3 className="text-base font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
+                <Gauge size={18} className="text-[var(--blue)]" /> Core Web Vitals <span className="text-xs font-normal text-[var(--ink-3)]">(Mobile)</span>
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[
+                  { k: 'LCP', v: data.technical.cwv.lcp, hint: 'Largest Contentful Paint' },
+                  { k: 'INP/TBT', v: data.technical.cwv.tbt, hint: 'Total Blocking Time' },
+                  { k: 'CLS', v: data.technical.cwv.cls, hint: 'Cumulative Layout Shift' },
+                  { k: 'FCP', v: data.technical.cwv.fcp, hint: 'First Contentful Paint' },
+                  { k: 'TTFB', v: data.technical.cwv.ttfb, hint: 'Server Response Time' },
+                ].filter((m) => m.v).map((m) => (
+                  <div key={m.k} className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-semibold" title={m.hint}>{m.k}</div>
+                    <div className="text-lg font-bold text-[var(--ink)] mt-0.5">{m.v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Structured Data / Schema (#8) */}
+          {data.schema && (
+            <div className="card p-6">
+              <h3 className="text-base font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
+                <FileText size={18} className="text-[var(--brand)]" /> Structured Data (Schema.org)
+              </h3>
+              <div className="flex flex-col">
+                {[
+                  { label: 'Organization / LocalBusiness', ok: data.schema.hasOrganization },
+                  { label: 'BreadcrumbList', ok: data.schema.hasBreadcrumb },
+                  { label: 'Product', ok: data.schema.hasProduct },
+                  { label: 'FAQPage', ok: data.schema.hasFAQ },
+                  { label: 'Review / AggregateRating', ok: data.schema.hasReview },
+                ].map((s) => (
+                  <div key={s.label} className="flex justify-between items-center py-2 border-b border-[var(--border)] last:border-0">
+                    <span className="text-sm text-[var(--ink-2)]">{s.label}</span>
+                    {s.ok
+                      ? <CheckCircle2 size={18} className="text-[var(--pass)]" />
+                      : <span className="text-xs text-[var(--ink-3)] px-2 py-0.5 bg-[var(--surface-2)] rounded">Missing</span>}
+                  </div>
+                ))}
+              </div>
+              {data.schema.types?.length > 0 && (
+                <p className="text-xs text-[var(--ink-3)] mt-3">Detected: {data.schema.types.join(', ')}</p>
+              )}
+            </div>
+          )}
+
+          {/* Site-level Crawl (#3) */}
+          {data.siteCrawl && data.siteCrawl.pagesAnalyzed > 0 && (
+            <div className="md:col-span-2 card p-6">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
+                  <Link2 size={18} className="text-[var(--blue)]" /> Site-Level Crawl
+                </h3>
+                <span className="text-xs text-[var(--ink-3)]">
+                  {data.siteCrawl.pagesAnalyzed} pages analyzed · {data.siteCrawl.discovered} discovered
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+                {[
+                  { label: 'Avg Words', value: data.siteCrawl.avgWordCount, tone: 'ink' },
+                  { label: 'Missing Title', value: data.siteCrawl.pagesMissingTitle, tone: data.siteCrawl.pagesMissingTitle ? 'red' : 'pass' },
+                  { label: 'Missing Meta', value: data.siteCrawl.pagesMissingMeta, tone: data.siteCrawl.pagesMissingMeta ? 'amber' : 'pass' },
+                  { label: 'Missing H1', value: data.siteCrawl.pagesMissingH1, tone: data.siteCrawl.pagesMissingH1 ? 'red' : 'pass' },
+                  { label: 'Multiple H1', value: data.siteCrawl.pagesMultipleH1, tone: data.siteCrawl.pagesMultipleH1 ? 'amber' : 'pass' },
+                  { label: 'Thin Content', value: data.siteCrawl.thinContentPages, tone: data.siteCrawl.thinContentPages ? 'amber' : 'pass' },
+                ].map((m) => (
+                  <div key={m.label} className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-semibold">{m.label}</div>
+                    <div className={`text-xl font-bold mt-0.5 ${m.tone === 'red' ? 'text-[var(--fail)]' : m.tone === 'amber' ? 'text-[var(--warn)]' : m.tone === 'pass' ? 'text-[var(--pass)]' : 'text-[var(--ink)]'}`}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-[var(--surface-2)] text-[var(--ink-3)] uppercase tracking-wider text-xs">
+                    <tr>
+                      <th className="px-4 py-3 rounded-l-lg">Page</th>
+                      <th className="px-4 py-3">Title</th>
+                      <th className="px-4 py-3">Words</th>
+                      <th className="px-4 py-3">H1</th>
+                      <th className="px-4 py-3 rounded-r-lg">Meta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.siteCrawl.sample.map((p: { url: string; title: string; words: number; h1: number; hasMeta: boolean }, i: number) => (
+                      <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
+                        <td className="px-4 py-3 text-[var(--blue)] max-w-[200px] truncate">{p.url.replace(/^https?:\/\/[^/]+/, '') || '/'}</td>
+                        <td className="px-4 py-3 text-[var(--ink-2)] max-w-[260px] truncate">{p.title}</td>
+                        <td className="px-4 py-3 text-[var(--ink-2)] font-mono">{p.words}</td>
+                        <td className="px-4 py-3"><span className={p.h1 === 1 ? 'text-[var(--pass)]' : 'text-[var(--fail)]'}>{p.h1}</span></td>
+                        <td className="px-4 py-3">{p.hasMeta ? <CheckCircle2 size={16} className="text-[var(--pass)]" /> : <XCircle size={16} className="text-[var(--fail)]" />}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Keyword Opportunities */}
           {data.synthesis?.keywordOpportunities && (
@@ -225,20 +368,20 @@ function DashboardContent() {
           )}
 
           {/* On-Page Snapshot */}
-          <div className="md:col-span-2 bg-[var(--mid)] border border-[#2a2a4a] rounded-xl p-6 mt-4">
-            <h3 className="text-lg font-bold text-white mb-6">Current Title Tag Snapshot</h3>
-            
-            <div className="bg-[#1a1a2e] border border-[rgba(201,168,76,0.3)] rounded-lg p-5 mb-4">
-              <div className="text-[10px] text-[var(--gold)] uppercase tracking-wider font-bold mb-2">Current Title Tag</div>
-              <div className="text-md text-[#3498db] font-semibold mb-1">{data.onPage.title || 'Missing Title'}</div>
+          <div className="md:col-span-2 card p-6">
+            <h3 className="text-base font-bold text-[var(--ink)] mb-5">Current Title Tag Snapshot</h3>
+
+            <div className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg p-5 mb-4">
+              <div className="text-[10px] text-[var(--ink-3)] uppercase tracking-wider font-bold mb-2">Current Title Tag</div>
+              <div className="text-md text-[var(--blue)] font-semibold mb-1">{data.onPage.title || 'Missing Title'}</div>
               <div className={`text-xs ${data.onPage.titleLength > 60 ? 'text-[var(--warn)]' : 'text-[var(--pass)]'}`}>
                 {data.onPage.titleLength} characters {data.onPage.titleLength > 60 ? '(Too Long)' : '(Optimal)'}
               </div>
             </div>
 
-            <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-lg p-5">
-              <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-bold mb-2">Current Meta Description</div>
-              <div className="text-sm text-[#bbb] italic mb-1">{data.onPage.metaDescription || 'No Meta Description Found'}</div>
+            <div className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg p-5">
+              <div className="text-[10px] text-[var(--ink-3)] uppercase tracking-wider font-bold mb-2">Current Meta Description</div>
+              <div className="text-sm text-[var(--ink-2)] italic mb-1">{data.onPage.metaDescription || 'No Meta Description Found'}</div>
               <div className={`text-xs ${data.onPage.metaDescLength < 120 || data.onPage.metaDescLength > 160 ? 'text-[var(--warn)]' : 'text-[var(--pass)]'}`}>
                 {data.onPage.metaDescLength} chars (Recommended: 120-160)
               </div>
@@ -247,26 +390,26 @@ function DashboardContent() {
 
           {data.synthesis?.titleTags && (
             <div className="md:col-span-2">
-              {/* The Detailed Title Tags Component from AI generator */}
               <TitleTagsOptimizer titleTags={data.synthesis.titleTags} />
             </div>
           )}
 
-        </div>
+          </section>
 
-        {/* Action Plan Board & Content Calendar - Full Width Bottom */}
-        <div className="max-w-6xl mx-auto mt-8">
-           {data.synthesis?.contentCalendar && <ContentCalendar calendar={data.synthesis.contentCalendar} />}
-           <ActionPlanBoard data={data} />
-        </div>
-      </section>
+          {/* Action Plan Board & Content Calendar */}
+          <section className="flex flex-col gap-5">
+            {data.synthesis?.contentCalendar && <ContentCalendar calendar={data.synthesis.contentCalendar} />}
+            <ActionPlanBoard data={data} />
+          </section>
+        </main>
+      </div>
     </div>
   );
 }
 
 export default function Dashboard() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-[var(--gold)]">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-[var(--ink-3)]">Loading…</div>}>
       <DashboardContent />
     </Suspense>
   );

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Loader2 } from 'lucide-react';
+import RecentAudits from './RecentAudits';
 
 export default function Home() {
   const router = useRouter();
@@ -26,24 +27,30 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#1a1a2e] to-[#0f3460] text-[#eee]">
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg)] text-[var(--ink)]">
       <div className="max-w-xl w-full text-center mb-10">
-        <h1 className="text-4xl md:text-5xl font-extrabold text-[#C9A84C] mb-4 tracking-tight drop-shadow-lg">
-          SEO Audit & Action Plan
+        <div className="inline-flex items-center gap-2 mb-5">
+          <div className="w-9 h-9 rounded-lg bg-[var(--brand)] flex items-center justify-center text-white">
+            <Search size={18} />
+          </div>
+          <span className="font-bold text-lg tracking-tight">SEO Audit</span>
+        </div>
+        <h1 className="text-4xl md:text-5xl font-extrabold text-[var(--ink)] mb-4 tracking-tight">
+          SEO Audit &amp; Action Plan
         </h1>
-        <p className="text-[#aaa] text-lg">
+        <p className="text-[var(--ink-2)] text-lg">
           Generate an executive-ready SEO analysis, complete with competitor gaps, content briefs, and technical health checks.
         </p>
       </div>
 
-      <div className="w-full max-w-xl rounded-2xl bg-[#16213e] p-8 border border-[rgba(255,255,255,0.06)] shadow-2xl backdrop-blur-sm">
+      <div className="w-full max-w-xl card p-8" style={{ boxShadow: 'var(--shadow-md)' }}>
         <form onSubmit={handleAnalyze} className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
-            <label htmlFor="url" className="text-sm font-semibold text-[#ddd] tracking-wide uppercase">
+            <label htmlFor="url" className="text-xs font-semibold text-[var(--ink-2)] tracking-wide uppercase">
               Target URL
             </label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#aaa]">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--ink-3)]">
                 <Search size={18} />
               </div>
               <input
@@ -53,13 +60,13 @@ export default function Home() {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 required
-                className="w-full pl-10 pr-4 py-3 bg-[rgba(255,255,255,0.03)] border border-[#2a2a4a] rounded-lg text-white placeholder-[#888] focus:outline-none focus:border-[#C9A84C] focus:ring-1 focus:ring-[#C9A84C] transition-all"
+                className="w-full pl-10 pr-4 py-3 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg text-[var(--ink)] placeholder-[var(--ink-3)] focus:outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-soft)] transition-all"
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
-            <label htmlFor="competitors" className="text-sm font-semibold text-[#ddd] tracking-wide uppercase">
+            <label htmlFor="competitors" className="text-xs font-semibold text-[var(--ink-2)] tracking-wide uppercase">
               Competitor URLs (Optional)
             </label>
             <input
@@ -68,15 +75,15 @@ export default function Home() {
               placeholder="e.g. beistravel.com, calpaktravel.com"
               value={competitors}
               onChange={(e) => setCompetitors(e.target.value)}
-              className="w-full px-4 py-3 bg-[rgba(255,255,255,0.03)] border border-[#2a2a4a] rounded-lg text-white placeholder-[#888] focus:outline-none focus:border-[#C9A84C] focus:ring-1 focus:ring-[#C9A84C] transition-all"
+              className="w-full px-4 py-3 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg text-[var(--ink)] placeholder-[var(--ink-3)] focus:outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-soft)] transition-all"
             />
-            <p className="text-xs text-[#aaa]">Comma separated list of competitors for gap analysis.</p>
+            <p className="text-xs text-[var(--ink-3)]">Comma separated list of competitors for gap analysis.</p>
           </div>
 
           <button
             type="submit"
             disabled={loading || !url}
-            className="mt-4 w-full flex justify-center items-center gap-2 py-3 px-6 rounded-lg font-bold text-[#1a1a2e] bg-gradient-to-r from-[#C9A84C] to-[#f1c40f] hover:from-[#f1c40f] hover:to-[#f39c12] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(201,168,76,0.3)]"
+            className="mt-2 w-full flex justify-center items-center gap-2 py-3 px-6 rounded-lg font-semibold text-white bg-[var(--brand)] hover:brightness-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>
@@ -90,23 +97,20 @@ export default function Home() {
         </form>
       </div>
 
-      <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6 text-center max-w-3xl">
-        <div className="flex flex-col items-center gap-2 text-[#aaa]">
-          <div className="w-12 h-12 rounded-full bg-[rgba(52,152,219,0.1)] text-[#3498db] flex items-center justify-center font-bold text-xl">1</div>
-          <span className="text-sm mt-1">Crawl Site & Sitemap</span>
-        </div>
-        <div className="flex flex-col items-center gap-2 text-[#aaa]">
-          <div className="w-12 h-12 rounded-full bg-[rgba(46,204,113,0.1)] text-[#2ecc71] flex items-center justify-center font-bold text-xl">2</div>
-          <span className="text-sm mt-1">Analyze Competitors</span>
-        </div>
-        <div className="flex flex-col items-center gap-2 text-[#aaa]">
-          <div className="w-12 h-12 rounded-full bg-[rgba(243,156,18,0.1)] text-[#f39c12] flex items-center justify-center font-bold text-xl">3</div>
-          <span className="text-sm mt-1">Check Speed & UX</span>
-        </div>
-        <div className="flex flex-col items-center gap-2 text-[#aaa]">
-          <div className="w-12 h-12 rounded-full bg-[rgba(231,76,60,0.1)] text-[#e74c3c] flex items-center justify-center font-bold text-xl">4</div>
-          <span className="text-sm mt-1">AI Synthesis</span>
-        </div>
+      <RecentAudits />
+
+      <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-6 text-center max-w-3xl">
+        {[
+          { n: 1, label: 'Crawl Site & Sitemap', tone: 'var(--blue)', soft: 'var(--blue-soft)' },
+          { n: 2, label: 'Analyze Competitors', tone: 'var(--brand)', soft: 'var(--brand-soft)' },
+          { n: 3, label: 'Check Speed & UX', tone: 'var(--amber)', soft: 'var(--amber-soft)' },
+          { n: 4, label: 'AI Synthesis', tone: 'var(--red)', soft: 'var(--red-soft)' },
+        ].map((s) => (
+          <div key={s.n} className="flex flex-col items-center gap-2 text-[var(--ink-2)]">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl" style={{ background: s.soft, color: s.tone }}>{s.n}</div>
+            <span className="text-sm mt-1">{s.label}</span>
+          </div>
+        ))}
       </div>
     </main>
   );

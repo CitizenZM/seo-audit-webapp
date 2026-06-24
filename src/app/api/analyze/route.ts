@@ -7,20 +7,63 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // seconds — headless scraping + AI can be slow
 
+/**
+ * Get the page HTML. Tries headless Chromium first (renders JS-heavy sites),
+ * and falls back to a plain fetch if the browser can't launch (e.g. no local
+ * Chrome installed, or a serverless cold-start failure). Resilience upgrade so
+ * a single rendering failure never aborts the whole audit. (#10)
+ */
+async function getHtml(targetUrl: string): Promise<{ html: string; rendered: boolean }> {
+  // Attempt headless render with one retry.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let browser;
+    try {
+      browser = await launchBrowser();
+      const page = await browser.newPage();
+      await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      const html = await page.content();
+      return { html, rendered: true };
+    } catch (err) {
+      console.warn(`Headless render attempt ${attempt + 1} failed:`, err instanceof Error ? err.message : err);
+    } finally {
+      if (browser) await browser.close().catch(() => {});
+    }
+  }
+
+  // Fallback: plain HTTP fetch (no JS execution, but enough for static SEO signals).
+  const res = await fetch(targetUrl, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SEOAuditBot/1.0)' },
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error(`Could not fetch ${targetUrl} (HTTP ${res.status})`);
+  return { html: await res.text(), rendered: false };
+}
+
+/** Parse all JSON-LD blocks and collect their schema.org @type values. (#8) */
+function detectSchemaTypes($: cheerio.CheerioAPI): string[] {
+  const types = new Set<string>();
+  $('script[type="application/ld+json"]').each((_, el) => {
+    try {
+      const json = JSON.parse($(el).text());
+      const nodes = Array.isArray(json) ? json : json['@graph'] ?? [json];
+      for (const node of [].concat(nodes as never)) {
+        const t = (node as Record<string, unknown>)?.['@type'];
+        if (typeof t === 'string') types.add(t);
+        else if (Array.isArray(t)) t.forEach((x) => typeof x === 'string' && types.add(x));
+      }
+    } catch {
+      /* ignore malformed JSON-LD */
+    }
+  });
+  return [...types];
+}
+
 async function scrapeSite(targetUrl: string, isCompetitor = false) {
   const urlObj = new URL(targetUrl);
   const domain = urlObj.hostname;
 
-  // 1. Render the page with headless Chromium
-  const browser = await launchBrowser();
-  let html: string;
-  try {
-    const page = await browser.newPage();
-    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-    html = await page.content();
-  } finally {
-    await browser.close();
-  }
+  // 1. Render the page (headless Chromium with fetch fallback)
+  const { html, rendered } = await getHtml(targetUrl);
 
   // 2. Parse HTML
   const $ = cheerio.load(html);
@@ -51,9 +94,11 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
 
   const hasCartOrCheckout =
     $('a[href*="cart"], a[href*="checkout"], button:contains("Add to cart")').length > 0;
-  const hasReviewsSchema = $('script[type="application/ld+json"]')
-    .text()
-    .includes('AggregateRating');
+  const schemaTypes = detectSchemaTypes($);
+  const hasReviewsSchema =
+    $('script[type="application/ld+json"]').text().includes('AggregateRating') ||
+    schemaTypes.includes('AggregateRating') ||
+    schemaTypes.includes('Review');
   const imageCount = $('img').length;
   const imagesWithAlt = $('img[alt]').length;
 
@@ -61,6 +106,8 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
   let hasRobots = false;
   let hasSitemap = false;
   let speedScore = 0;
+  // Core Web Vitals (#5) — populated from the Lighthouse audit metrics.
+  const cwv = { lcp: '', cls: '', fcp: '', tbt: '', ttfb: '' };
 
   if (!isCompetitor) {
     const [robots, sitemap, pagespeed] = await Promise.allSettled([
@@ -79,6 +126,12 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
       try {
         const data = await pagespeed.value.json();
         speedScore = (data?.lighthouseResult?.categories?.performance?.score ?? 0) * 100;
+        const audits = data?.lighthouseResult?.audits ?? {};
+        cwv.lcp = audits['largest-contentful-paint']?.displayValue ?? '';
+        cwv.cls = audits['cumulative-layout-shift']?.displayValue ?? '';
+        cwv.fcp = audits['first-contentful-paint']?.displayValue ?? '';
+        cwv.tbt = audits['total-blocking-time']?.displayValue ?? '';
+        cwv.ttfb = audits['server-response-time']?.displayValue ?? '';
       } catch {
         /* ignore */
       }
@@ -88,6 +141,7 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
   return {
     url: targetUrl,
     domain,
+    rendered,
     onPage: {
       title,
       titleLength: title.length,
@@ -107,10 +161,19 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
       hasSitemapXml: hasSitemap,
       isHttps: targetUrl.startsWith('https://'),
       mobileSpeedScore: Math.round(speedScore),
+      cwv,
     },
     cro: {
       hasCartOrCheckout,
       hasReviewsSchema,
+    },
+    schema: {
+      types: schemaTypes,
+      hasOrganization: schemaTypes.some((t) => ['Organization', 'LocalBusiness', 'Corporation'].includes(t)),
+      hasBreadcrumb: schemaTypes.includes('BreadcrumbList'),
+      hasProduct: schemaTypes.includes('Product'),
+      hasFAQ: schemaTypes.includes('FAQPage'),
+      hasReview: schemaTypes.includes('AggregateRating') || schemaTypes.includes('Review'),
     },
   };
 }
@@ -118,6 +181,83 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
 function normalizeUrl(raw: string): string {
   const trimmed = raw.trim();
   return trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+}
+
+/**
+ * Site-level crawl (#3). Reads sitemap.xml (or falls back to homepage internal
+ * links), samples up to MAX_PAGES URLs, and aggregates on-page health across
+ * them so the audit reflects the whole site, not just the homepage. Uses plain
+ * fetch (fast, no per-page PageSpeed) and is fully best-effort — any failure
+ * just shrinks the sample rather than aborting the audit.
+ */
+async function crawlSite(origin: string, homepageHtml: string, targetUrl: string) {
+  const MAX_PAGES = 8;
+  const domain = new URL(origin).hostname;
+  const urls = new Set<string>();
+
+  // 1. Prefer sitemap.xml
+  try {
+    const res = await fetch(`${origin}/sitemap.xml`, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const xml = await res.text();
+      const $x = cheerio.load(xml, { xmlMode: true });
+      $x('loc').each((_, el) => {
+        const loc = $x(el).text().trim();
+        if (loc) urls.add(loc);
+      });
+    }
+  } catch {
+    /* no sitemap — fall back to links below */
+  }
+
+  // 2. Fall back to / supplement with internal links from the homepage
+  if (urls.size < MAX_PAGES) {
+    const $h = cheerio.load(homepageHtml);
+    $h('a').each((_, el) => {
+      const href = $h(el).attr('href');
+      if (!href) return;
+      try {
+        const u = new URL(href, targetUrl);
+        if (u.hostname === domain) urls.add(u.href.split('#')[0]);
+      } catch { /* ignore */ }
+    });
+  }
+
+  const sample = [...urls].filter((u) => u !== targetUrl).slice(0, MAX_PAGES);
+
+  const pages = await Promise.allSettled(
+    sample.map(async (url) => {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SEOAuditBot/1.0)' },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const $ = cheerio.load(await res.text());
+      const title = $('title').text();
+      const metaDesc = $('meta[name="description"]').attr('content') || '';
+      const h1Count = $('h1').length;
+      $('script, style, noscript').remove();
+      const wordCount = ($('body').text().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)).length;
+      return { url, title, titleLen: title.length, metaLen: metaDesc.length, h1Count, wordCount };
+    }),
+  );
+
+  const ok = pages
+    .filter((p): p is PromiseFulfilledResult<Awaited<ReturnType<() => Promise<{ url: string; title: string; titleLen: number; metaLen: number; h1Count: number; wordCount: number }>>>> => p.status === 'fulfilled')
+    .map((p) => p.value);
+
+  const analyzed = ok.length;
+  return {
+    discovered: urls.size,
+    pagesAnalyzed: analyzed,
+    avgWordCount: analyzed ? Math.round(ok.reduce((s, p) => s + p.wordCount, 0) / analyzed) : 0,
+    pagesMissingTitle: ok.filter((p) => !p.title).length,
+    pagesMissingMeta: ok.filter((p) => p.metaLen === 0).length,
+    pagesMissingH1: ok.filter((p) => p.h1Count === 0).length,
+    pagesMultipleH1: ok.filter((p) => p.h1Count > 1).length,
+    thinContentPages: ok.filter((p) => p.wordCount < 300).length,
+    sample: ok.map((p) => ({ url: p.url, title: p.title || '(missing)', words: p.wordCount, h1: p.h1Count, hasMeta: p.metaLen > 0 })),
+  };
 }
 
 export async function GET(request: Request) {
@@ -164,6 +304,20 @@ export async function GET(request: Request) {
       )
       .map((r) => r.value);
 
+    // Site-level multi-page crawl (#3) — best-effort, never aborts the audit.
+    const origin = new URL(mainAnalysis.url).origin;
+    let siteCrawl = null;
+    try {
+      const home = await fetch(mainAnalysis.url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SEOAuditBot/1.0)' },
+        signal: AbortSignal.timeout(12000),
+      });
+      const homeHtml = home.ok ? await home.text() : '';
+      siteCrawl = await crawlSite(origin, homeHtml, mainAnalysis.url);
+    } catch (e) {
+      console.warn('Site crawl skipped:', e instanceof Error ? e.message : e);
+    }
+
     // AI synthesis (validated; null on failure so the dashboard still renders raw data).
     const synthesis = await generateSynthesis({
       url: mainAnalysis.url,
@@ -186,7 +340,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      data: { ...mainAnalysis, synthesis },
+      data: { ...mainAnalysis, synthesis, siteCrawl },
       competitors,
     });
   } catch (error) {
