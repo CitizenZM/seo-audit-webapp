@@ -8,6 +8,7 @@ import TopBar from './TopBar';
 import StatCard from './StatCard';
 import { saveAudit, previousScore } from '@/lib/history';
 import EmailReport from './EmailReport';
+import WatchlistCard from './WatchlistCard';
 import ActionPlanBoard from './ActionPlanBoard';
 import RadarChart from './RadarChart';
 import TitleTagsOptimizer from './TitleTagsOptimizer';
@@ -37,47 +38,95 @@ function DashboardContent() {
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [step, setStep] = useState(0); // staged progress (#2)
+  // Real backend stage (#2) — no more simulated timer. 'queued' until the
+  // first poll response comes back.
+  const [stage, setStage] = useState<string>('queued');
   const [priorScore, setPriorScore] = useState<number | null>(null);
 
   useEffect(() => {
     if (!targetUrl) return;
+    let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // Advance the visible progress steps while the audit runs (#2).
-    const STEPS = 4;
-    const timer = setInterval(() => setStep((s) => (s < STEPS - 1 ? s + 1 : s)), 2500);
+    function finish(resultData: unknown, resultCompetitors: unknown[]) {
+      if (cancelled) return;
+      setData(resultData);
+      setCompetitors(resultCompetitors || []);
+      // Persist to local history for trend comparison (#1). Read the prior
+      // score BEFORE overwriting it (B3) so the delta shown later is real.
+      // Uses the composite overallScore (always a number, unlike the raw
+      // PageSpeed mobileSpeedScore which can be null — B5), so history/email
+      // trends are never skipped just because PageSpeed had an off day.
+      const d = resultData as { url: string; domain: string; overallScore?: number };
+      const measuredScore: number = d.overallScore ?? 0;
+      try {
+        setPriorScore(previousScore(d.url));
+        saveAudit({
+          url: d.url,
+          domain: d.domain,
+          score: measuredScore,
+          competitors: (resultCompetitors || []).length,
+          timestamp: Date.now(),
+        });
+      } catch { /* non-fatal */ }
+      setLoading(false);
+    }
 
-    let apiUrl = `/api/analyze?url=${encodeURIComponent(targetUrl)}`;
-    if (competitorsParam) apiUrl += `&competitors=${encodeURIComponent(competitorsParam)}`;
+    async function poll(jobId: string) {
+      if (cancelled) return;
+      try {
+        const res = await fetch(`/api/audits/${jobId}`);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to check audit status');
 
-    fetch(apiUrl)
-      .then(res => res.json())
-      .then(res => {
-        if (res.error) throw new Error(res.error);
-        setData(res.data);
-        setCompetitors(res.competitors || []);
-        // Persist to local history for trend comparison (#1). Read the prior
-        // score BEFORE overwriting it (B3) so the delta shown later is real.
-        // Skip entirely when the score is unmeasured (B5) — a null/0 write
-        // would corrupt future trend comparisons.
-        const measuredScore: number | null = res.data.technical?.mobileSpeedScore ?? null;
-        try {
-          setPriorScore(previousScore(res.data.url));
-          if (measuredScore != null) {
-            saveAudit({
-              url: res.data.url,
-              domain: res.data.domain,
-              score: measuredScore,
-              competitors: (res.competitors || []).length,
-              timestamp: Date.now(),
-            });
-          }
-        } catch { /* non-fatal */ }
-      })
-      .catch(err => setError(err.message))
-      .finally(() => { clearInterval(timer); setLoading(false); });
+        setStage(json.stage ?? 'queued');
+        if (json.status === 'done' && json.result) {
+          finish(json.result.data, json.result.competitors);
+          return;
+        }
+        if (json.status === 'error') {
+          throw new Error(json.error || 'Audit failed');
+        }
+        pollTimer = setTimeout(() => poll(jobId), 2000);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to check audit status');
+          setLoading(false);
+        }
+      }
+    }
 
-    return () => clearInterval(timer);
+    async function start() {
+      try {
+        const res = await fetch('/api/audits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: targetUrl, competitors: competitorsParam }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to start audit');
+
+        // No Supabase configured — the server ran synchronously and returned
+        // the full result inline (job id is null, nothing to poll).
+        if (json.id === null) {
+          finish(json.data, json.competitors);
+          return;
+        }
+        setStage(json.stage ?? 'queued');
+        pollTimer = setTimeout(() => poll(json.id), 1500);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to start audit');
+          setLoading(false);
+        }
+      }
+    }
+
+    start();
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
   }, [targetUrl, competitorsParam]);
 
   if (!targetUrl) {
@@ -97,22 +146,33 @@ function DashboardContent() {
                 Running analysis engine — {safeHostname(targetUrl)}
               </div>
               <div className="flex flex-wrap gap-2">
-                {['Crawl site & sitemap', 'Analyze competitors', 'Check speed & UX', 'AI synthesis'].map((label, i) => (
-                  <span
-                    key={label}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      i < step ? 'bg-[var(--brand-soft)] text-[var(--brand-ink)] border-transparent'
-                      : i === step ? 'bg-[var(--surface)] text-[var(--ink)] border-[var(--brand)]'
-                      : 'bg-[var(--surface)] text-[var(--ink-3)] border-[var(--border)]'
-                    }`}
-                  >
-                    {i < step ? '✓ ' : i === step ? '● ' : ''}{label}
-                  </span>
-                ))}
+                {[
+                  { key: 'crawl', label: 'Crawl site & sitemap' },
+                  { key: 'competitors', label: 'Analyze competitors' },
+                  { key: 'speed', label: 'Check speed & UX' },
+                  { key: 'ai', label: 'AI synthesis' },
+                  { key: 'serp', label: 'Live SERP lookup' },
+                ].map(({ key, label }, i, arr) => {
+                  const stageIdx = arr.findIndex((s) => s.key === stage);
+                  const isDone = stageIdx > i || stage === 'done';
+                  const isCurrent = stageIdx === i;
+                  return (
+                    <span
+                      key={key}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        isDone ? 'bg-[var(--brand-soft)] text-[var(--brand-ink)] border-transparent'
+                        : isCurrent ? 'bg-[var(--surface)] text-[var(--ink)] border-[var(--brand)]'
+                        : 'bg-[var(--surface)] text-[var(--ink-3)] border-[var(--border)]'
+                      }`}
+                    >
+                      {isDone ? '✓ ' : isCurrent ? '● ' : ''}{label}
+                    </span>
+                  );
+                })}
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mt-4">
-              {Array.from({ length: 4 }).map((_, i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5 mt-4">
+              {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="card p-5">
                   <div className="skeleton h-9 w-9 mb-4" />
                   <div className="skeleton h-7 w-24 mb-3" />
@@ -155,7 +215,9 @@ function DashboardContent() {
 
         <main className="p-6 max-w-[1200px] mx-auto flex flex-col gap-5">
           {/* KPI Row */}
-          <section id="overview" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 scroll-mt-20">
+          <section id="overview" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5 scroll-mt-20">
+            <StatCard label="Overall SEO Score" value={typeof data.overallScore === 'number' ? `${data.overallScore}/100` : 'N/A'} icon={Search}
+              tone={data.overallScore == null ? 'amber' : data.overallScore > 80 ? 'brand' : data.overallScore > 50 ? 'amber' : 'red'} />
             <StatCard label="Mobile Speed" value={data.technical.mobileSpeedScore != null ? `${data.technical.mobileSpeedScore}/100` : 'N/A'} icon={Gauge}
               tone={data.technical.mobileSpeedScore == null ? 'amber' : data.technical.mobileSpeedScore > 80 ? 'brand' : data.technical.mobileSpeedScore > 50 ? 'amber' : 'red'} />
             <StatCard label="On-Page Links" value={totalLinks} icon={Link2} tone="blue" />
@@ -477,7 +539,8 @@ function DashboardContent() {
           <section id="reports" className="flex flex-col gap-5 scroll-mt-20">
             {data.synthesis?.contentCalendar && <ContentCalendar calendar={data.synthesis.contentCalendar} />}
             <ActionPlanBoard data={data} />
-            <EmailReport url={data.url} domain={data.domain} score={data.technical.mobileSpeedScore} previousScore={priorScore} />
+            <EmailReport url={data.url} domain={data.domain} score={data.overallScore} previousScore={priorScore} />
+            <WatchlistCard url={data.url} domain={data.domain} />
           </section>
         </main>
       </div>

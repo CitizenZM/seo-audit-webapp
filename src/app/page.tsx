@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Loader2 } from 'lucide-react';
 import RecentAudits from './RecentAudits';
+import AccountMenu from './AccountMenu';
 
 export default function Home() {
   const router = useRouter();
@@ -27,7 +28,11 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg)] text-[var(--ink)]">
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg)] text-[var(--ink)] relative">
+      <div className="absolute top-6 right-6">
+        <AccountMenu />
+      </div>
+
       <div className="max-w-xl w-full text-center mb-10">
         <div className="inline-flex items-center gap-2 mb-5">
           <div className="w-9 h-9 rounded-lg bg-[var(--brand)] flex items-center justify-center text-white">

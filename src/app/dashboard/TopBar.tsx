@@ -1,6 +1,7 @@
 'use client';
 
 import { Search, RefreshCw, Share2, Download } from 'lucide-react';
+import AccountMenu from '@/app/AccountMenu';
 
 export default function TopBar({ url }: { url?: string }) {
   return (
@@ -38,6 +39,7 @@ export default function TopBar({ url }: { url?: string }) {
         >
           <Share2 size={15} /> Share
         </button>
+        <AccountMenu />
       </div>
     </header>
   );

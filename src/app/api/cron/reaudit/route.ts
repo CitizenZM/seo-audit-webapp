@@ -1,23 +1,24 @@
 import { NextResponse } from 'next/server';
 import { sendReportEmail } from '@/lib/email';
+import { runAudit, UnsafeUrlError } from '@/lib/runAudit';
+import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
- * Scheduled re-audit (#7). Runs on a Vercel Cron (see vercel.json) and re-audits
- * a watchlist, emailing a weekly report per entry.
+ * Scheduled re-audit (#7). Runs on a Vercel Cron (see vercel.json) and
+ * re-audits every seo_watchlist row, emailing only when the composite
+ * overallScore has actually moved since the last check.
  *
- * (B4) This always sends — it does NOT detect "score changed since last run",
- * because there is nowhere to persist `lastScore` between invocations: the
- * watchlist source is a static env var (WATCHLIST), and Vercel serverless
- * functions don't retain in-memory state across cold starts. An earlier
- * version claimed to "only email on change" but silently emailed every run
- * regardless — that was a bug, not a feature. If you hardcode `lastScore` in
- * WATCHLIST yourself, the email will show a delta against it; otherwise it
- * just reports the current score. Production upgrade: persist watchlists +
- * score history in Supabase (per-user monitors, real change detection).
+ * (B4, now fully fixed) The original version claimed to "only email on
+ * change" but couldn't — the watchlist lived in a static WATCHLIST env var,
+ * so last_score never persisted between runs and it silently emailed every
+ * time regardless. Real rows in seo_watchlist (see /api/watchlist) let this
+ * job read AND write last_score/last_checked_at, so change detection is now
+ * genuine. Falls back to the WATCHLIST env var only when Supabase isn't
+ * configured, as a no-DB stand-in (same caveat as before applies there).
  *
  * Secured by CRON_SECRET: Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`.
  * (S4) If CRON_SECRET isn't configured, this endpoint refuses to run rather
@@ -35,33 +36,75 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let watchlist: { url: string; email: string; lastScore?: number }[] = [];
+  const origin = new URL(request.url).origin;
+  const results: { url: string; score: number | null; emailed: boolean; error?: string }[] = [];
+
+  if (isSupabaseConfigured()) {
+    const db = supabaseAdmin();
+    const { data: watchlist, error } = await db
+      .from('seo_watchlist')
+      .select('id, url, email, last_score');
+
+    if (error) {
+      return NextResponse.json({ error: 'Failed to load watchlist' }, { status: 500 });
+    }
+    if (!watchlist || watchlist.length === 0) {
+      return NextResponse.json({ success: true, message: 'Watchlist empty — nothing to do.' });
+    }
+
+    for (const item of watchlist) {
+      try {
+        const { data } = await runAudit(item.url, undefined);
+        const score = data.overallScore ?? null;
+        // Genuine change detection: last_score is a real persisted value now.
+        const changed = item.last_score == null || (score != null && Math.abs(score - item.last_score) >= 1);
+
+        if (changed && item.email) {
+          await sendReportEmail({
+            to: item.email,
+            url: item.url,
+            domain: data.domain,
+            score,
+            previousScore: item.last_score ?? null,
+            reportUrl: `${origin}/dashboard?url=${encodeURIComponent(item.url)}`,
+          });
+        }
+
+        await db
+          .from('seo_watchlist')
+          .update({ last_score: score, last_checked_at: new Date().toISOString() })
+          .eq('id', item.id);
+
+        results.push({ url: item.url, score, emailed: changed && !!item.email });
+      } catch (e) {
+        const message = e instanceof UnsafeUrlError ? e.message : e instanceof Error ? e.message : 'failed';
+        results.push({ url: item.url, score: null, emailed: false, error: message });
+      }
+    }
+
+    return NextResponse.json({ success: true, audited: results.length, results });
+  }
+
+  // No-DB fallback: static env watchlist, no persisted change detection.
+  let envWatchlist: { url: string; email: string; lastScore?: number }[] = [];
   try {
-    watchlist = JSON.parse(process.env.WATCHLIST || '[]');
+    envWatchlist = JSON.parse(process.env.WATCHLIST || '[]');
   } catch {
     return NextResponse.json({ error: 'Invalid WATCHLIST env' }, { status: 500 });
   }
-  if (watchlist.length === 0) {
+  if (envWatchlist.length === 0) {
     return NextResponse.json({ success: true, message: 'Watchlist empty — nothing to do.' });
   }
 
-  const origin = new URL(request.url).origin;
-  const results = [];
-
-  for (const item of watchlist) {
+  for (const item of envWatchlist) {
     try {
-      const res = await fetch(`${origin}/api/analyze?url=${encodeURIComponent(item.url)}`, {
-        signal: AbortSignal.timeout(55000),
-      });
-      const json = await res.json();
-      const score: number | null = json?.data?.technical?.mobileSpeedScore ?? null;
-      const domain = json?.data?.domain ?? new URL(item.url).hostname;
-
+      const { data } = await runAudit(item.url, undefined);
+      const score = data.overallScore ?? null;
       if (item.email) {
         await sendReportEmail({
           to: item.email,
           url: item.url,
-          domain,
+          domain: data.domain,
           score,
           previousScore: item.lastScore ?? null,
           reportUrl: `${origin}/dashboard?url=${encodeURIComponent(item.url)}`,
@@ -69,7 +112,8 @@ export async function GET(request: Request) {
       }
       results.push({ url: item.url, score, emailed: !!item.email });
     } catch (e) {
-      results.push({ url: item.url, error: e instanceof Error ? e.message : 'failed' });
+      const message = e instanceof UnsafeUrlError ? e.message : e instanceof Error ? e.message : 'failed';
+      results.push({ url: item.url, score: null, emailed: false, error: message });
     }
   }
 
