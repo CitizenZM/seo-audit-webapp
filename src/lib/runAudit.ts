@@ -6,7 +6,10 @@ import { assertSafeUrl } from '@/lib/urlSafety';
 import { computeScore } from '@/lib/score';
 
 export type Stage = 'crawl' | 'competitors' | 'speed' | 'ai' | 'serp' | 'done';
-export type OnStage = (stage: Stage) => void;
+// Returns a Promise — callers MUST await it. An un-awaited progress write can
+// race with (and clobber) the final completion write that follows it, since
+// both target the same DB row; awaiting guarantees write ordering.
+export type OnStage = (stage: Stage) => void | Promise<void>;
 
 /**
  * Get the page HTML. Tries headless Chromium first (renders JS-heavy sites),
@@ -312,7 +315,7 @@ export async function runAudit(
     }
   }
 
-  onStage?.('crawl');
+  await onStage?.('crawl');
   const [mainResult, ...competitorResults] = await Promise.allSettled([
     scrapeSite(normalizedTarget, false),
     ...safeCompetitorUrls.map((u) => scrapeSite(u, true)),
@@ -324,7 +327,7 @@ export async function runAudit(
       : new Error('Failed to scrape target site');
   }
 
-  onStage?.('competitors');
+  await onStage?.('competitors');
   const mainAnalysis = mainResult.value;
   const competitors = competitorResults
     .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof scrapeSite>>> =>
@@ -341,14 +344,14 @@ export async function runAudit(
   const serpQuery =
     mainAnalysis.onPage.title?.split(/[|\-–—]/)[0]?.trim() || mainAnalysis.domain;
 
-  onStage?.('speed');
+  await onStage?.('speed');
   const [siteCrawlResult, synthesis, serp] = await Promise.all([
     crawlSite(origin, mainAnalysis._html, mainAnalysis.url).catch((e) => {
       console.warn('Site crawl skipped:', e instanceof Error ? e.message : e);
       return null;
     }),
     (async () => {
-      onStage?.('ai');
+      await onStage?.('ai');
       return generateSynthesis({
         url: mainAnalysis.url,
         domain: mainAnalysis.domain,
@@ -369,7 +372,7 @@ export async function runAudit(
       });
     })(),
     (async () => {
-      onStage?.('serp');
+      await onStage?.('serp');
       return fetchSerp(serpQuery);
     })(),
   ]);
@@ -391,7 +394,7 @@ export async function runAudit(
     synthesis: synthesis ? { topCategoryScores: synthesis.topCategoryScores } : null,
   });
 
-  onStage?.('done');
+  await onStage?.('done');
 
   return {
     data: {
