@@ -3,6 +3,8 @@ import * as cheerio from 'cheerio';
 import { launchBrowser } from '@/lib/browser';
 import { generateSynthesis } from '@/lib/synthesis';
 import { fetchSerp } from '@/lib/serp';
+import { assertSafeUrl } from '@/lib/urlSafety';
+import { rateLimit, clientIp } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,26 +17,27 @@ export const maxDuration = 60; // seconds — headless scraping + AI can be slow
  * a single rendering failure never aborts the whole audit. (#10)
  */
 async function getHtml(targetUrl: string): Promise<{ html: string; rendered: boolean }> {
-  // Attempt headless render with one retry.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    let browser;
-    try {
-      browser = await launchBrowser();
-      const page = await browser.newPage();
-      await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-      const html = await page.content();
-      return { html, rendered: true };
-    } catch (err) {
-      console.warn(`Headless render attempt ${attempt + 1} failed:`, err instanceof Error ? err.message : err);
-    } finally {
-      if (browser) await browser.close().catch(() => {});
-    }
+  // (B7) Single render attempt at a tight timeout, not 2×30s — under the
+  // route's 60s budget we still need room for competitor scraping, the site
+  // crawl, PageSpeed, AI synthesis, and SERP. A single slow render shouldn't
+  // burn the whole budget before those even start.
+  let browser;
+  try {
+    browser = await launchBrowser();
+    const page = await browser.newPage();
+    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 20000 });
+    const html = await page.content();
+    return { html, rendered: true };
+  } catch (err) {
+    console.warn('Headless render failed, falling back to plain fetch:', err instanceof Error ? err.message : err);
+  } finally {
+    if (browser) await browser.close().catch(() => {});
   }
 
   // Fallback: plain HTTP fetch (no JS execution, but enough for static SEO signals).
   const res = await fetch(targetUrl, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SEOAuditBot/1.0)' },
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`Could not fetch ${targetUrl} (HTTP ${res.status})`);
   return { html: await res.text(), rendered: false };
@@ -106,18 +109,23 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
   // 3. Aux files + PageSpeed (main site only)
   let hasRobots = false;
   let hasSitemap = false;
-  let speedScore = 0;
+  // null = not measured (PageSpeed failed/rate-limited) — distinct from a real
+  // score of 0, so the UI/history/email never treat "unknown" as "worst" (B5).
+  let speedScore: number | null = null;
   // Core Web Vitals (#5) — populated from the Lighthouse audit metrics.
   const cwv = { lcp: '', cls: '', fcp: '', tbt: '', ttfb: '' };
 
   if (!isCompetitor) {
+    // (B7) PageSpeed previously had no timeout and could hang indefinitely,
+    // eating into the route's fixed time budget.
     const [robots, sitemap, pagespeed] = await Promise.allSettled([
-      fetch(`${urlObj.origin}/robots.txt`),
-      fetch(`${urlObj.origin}/sitemap.xml`),
+      fetch(`${urlObj.origin}/robots.txt`, { signal: AbortSignal.timeout(8000) }),
+      fetch(`${urlObj.origin}/sitemap.xml`, { signal: AbortSignal.timeout(8000) }),
       fetch(
         `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(
           targetUrl,
         )}&strategy=mobile`,
+        { signal: AbortSignal.timeout(25000) },
       ),
     ]);
 
@@ -126,7 +134,8 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
     if (pagespeed.status === 'fulfilled' && pagespeed.value.ok) {
       try {
         const data = await pagespeed.value.json();
-        speedScore = (data?.lighthouseResult?.categories?.performance?.score ?? 0) * 100;
+        const rawScore = data?.lighthouseResult?.categories?.performance?.score;
+        if (typeof rawScore === 'number') speedScore = Math.round(rawScore * 100);
         const audits = data?.lighthouseResult?.audits ?? {};
         cwv.lcp = audits['largest-contentful-paint']?.displayValue ?? '';
         cwv.cls = audits['cumulative-layout-shift']?.displayValue ?? '';
@@ -143,6 +152,9 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
     url: targetUrl,
     domain,
     rendered,
+    // Not part of the public response — stripped before the JSON is sent.
+    // Lets the site crawl reuse the homepage HTML instead of re-fetching it.
+    _html: html,
     onPage: {
       title,
       titleLength: title.length,
@@ -161,7 +173,7 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
       hasRobotsTxt: hasRobots,
       hasSitemapXml: hasSitemap,
       isHttps: targetUrl.startsWith('https://'),
-      mobileSpeedScore: Math.round(speedScore),
+      mobileSpeedScore: speedScore,
       cwv,
     },
     cro: {
@@ -262,6 +274,16 @@ async function crawlSite(origin: string, homepageHtml: string, targetUrl: string
 }
 
 export async function GET(request: Request) {
+  // S5: this endpoint runs Puppeteer + PageSpeed + Claude — expensive per call.
+  // 5 requests / 5 minutes per client is enough for real usage, not for abuse scripts.
+  const limit = rateLimit(`analyze:${clientIp(request)}`, 5, 5 * 60 * 1000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait before running another audit.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const targetUrl = searchParams.get('url');
   const competitorsParam = searchParams.get('competitors');
@@ -279,6 +301,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Invalid URL provided' }, { status: 400 });
   }
 
+  // S1: block SSRF — reject targets that resolve to internal/private/metadata IPs.
+  try {
+    await assertSafeUrl(normalizedTarget);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'URL not allowed' },
+      { status: 400 },
+    );
+  }
+
   try {
     // Main site + competitors are scraped concurrently.
     const competitorUrls = (competitorsParam ?? '')
@@ -287,9 +319,20 @@ export async function GET(request: Request) {
       .filter(Boolean)
       .map(normalizeUrl);
 
+    // S1: also validate competitor URLs — same SSRF surface via a second param.
+    const safeCompetitorUrls: string[] = [];
+    for (const u of competitorUrls) {
+      try {
+        await assertSafeUrl(u);
+        safeCompetitorUrls.push(u);
+      } catch {
+        /* skip unsafe/unresolvable competitor URL rather than failing the whole audit */
+      }
+    }
+
     const [mainResult, ...competitorResults] = await Promise.allSettled([
       scrapeSite(normalizedTarget, false),
-      ...competitorUrls.map((u) => scrapeSite(u, true)),
+      ...safeCompetitorUrls.map((u) => scrapeSite(u, true)),
     ]);
 
     if (mainResult.status !== 'fulfilled') {
@@ -305,51 +348,53 @@ export async function GET(request: Request) {
       )
       .map((r) => r.value);
 
-    // Site-level multi-page crawl (#3) — best-effort, never aborts the audit.
+    // (B7) Site crawl, AI synthesis, and SERP lookup are independent of each
+    // other — run them concurrently instead of chained awaits, since each can
+    // take several seconds and Vercel's per-invocation time budget is fixed.
+    // SERP uses the title (not the AI-derived keyword) so it doesn't have to
+    // wait on synthesis first.
     const origin = new URL(mainAnalysis.url).origin;
-    let siteCrawl = null;
-    try {
-      const home = await fetch(mainAnalysis.url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SEOAuditBot/1.0)' },
-        signal: AbortSignal.timeout(12000),
-      });
-      const homeHtml = home.ok ? await home.text() : '';
-      siteCrawl = await crawlSite(origin, homeHtml, mainAnalysis.url);
-    } catch (e) {
-      console.warn('Site crawl skipped:', e instanceof Error ? e.message : e);
-    }
-
-    // AI synthesis (validated; null on failure so the dashboard still renders raw data).
-    const synthesis = await generateSynthesis({
-      url: mainAnalysis.url,
-      domain: mainAnalysis.domain,
-      title: mainAnalysis.onPage.title,
-      titleLength: mainAnalysis.onPage.titleLength,
-      metaDescription: mainAnalysis.onPage.metaDescription,
-      h1Count: mainAnalysis.onPage.h1Count,
-      wordCount: mainAnalysis.onPage.wordCount,
-      mobileSpeedScore: mainAnalysis.technical.mobileSpeedScore,
-      hasCart: mainAnalysis.cro.hasCartOrCheckout,
-      hasReviewsSchema: mainAnalysis.cro.hasReviewsSchema,
-      competitors: competitors.map((c) => ({
-        domain: c.domain,
-        wordCount: c.onPage.wordCount,
-        h1Count: c.onPage.h1Count,
-        externalCount: c.links.externalCount,
-      })),
-    });
-
-    // Live SERP intelligence (#4) — real Google results for the primary keyword.
     const serpQuery =
-      synthesis?.keywordOpportunities?.[0]?.keyword ||
-      mainAnalysis.onPage.title?.split(/[|\-–—]/)[0]?.trim() ||
-      mainAnalysis.domain;
-    const serp = await fetchSerp(serpQuery);
+      mainAnalysis.onPage.title?.split(/[|\-–—]/)[0]?.trim() || mainAnalysis.domain;
+
+    const [siteCrawlResult, synthesis, serp] = await Promise.all([
+      crawlSite(origin, mainAnalysis._html, mainAnalysis.url).catch((e) => {
+        console.warn('Site crawl skipped:', e instanceof Error ? e.message : e);
+        return null;
+      }),
+      generateSynthesis({
+        url: mainAnalysis.url,
+        domain: mainAnalysis.domain,
+        title: mainAnalysis.onPage.title,
+        titleLength: mainAnalysis.onPage.titleLength,
+        metaDescription: mainAnalysis.onPage.metaDescription,
+        h1Count: mainAnalysis.onPage.h1Count,
+        wordCount: mainAnalysis.onPage.wordCount,
+        mobileSpeedScore: mainAnalysis.technical.mobileSpeedScore,
+        hasCart: mainAnalysis.cro.hasCartOrCheckout,
+        hasReviewsSchema: mainAnalysis.cro.hasReviewsSchema,
+        competitors: competitors.map((c) => ({
+          domain: c.domain,
+          wordCount: c.onPage.wordCount,
+          h1Count: c.onPage.h1Count,
+          externalCount: c.links.externalCount,
+        })),
+      }),
+      fetchSerp(serpQuery),
+    ]);
+
+    // Strip the internal-only raw HTML before returning the response.
+    const { _html: _mainHtml, ...publicMainAnalysis } = mainAnalysis;
+    void _mainHtml;
+    const publicCompetitors = competitors.map(({ _html: _competitorHtml, ...c }) => {
+      void _competitorHtml;
+      return c;
+    });
 
     return NextResponse.json({
       success: true,
-      data: { ...mainAnalysis, synthesis, siteCrawl, serp },
-      competitors,
+      data: { ...publicMainAnalysis, synthesis, siteCrawl: siteCrawlResult, serp },
+      competitors: publicCompetitors,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

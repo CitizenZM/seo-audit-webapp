@@ -6,7 +6,7 @@ import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Hash,
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import StatCard from './StatCard';
-import { saveAudit } from '@/lib/history';
+import { saveAudit, previousScore } from '@/lib/history';
 import EmailReport from './EmailReport';
 import ActionPlanBoard from './ActionPlanBoard';
 import RadarChart from './RadarChart';
@@ -16,6 +16,15 @@ import ContentCalendar from './ContentCalendar';
 import KeywordIntentChart from './KeywordIntentChart';
 import KeywordTable from './KeywordTable';
 import CompetitorGapTable from './CompetitorGapTable';
+
+/** (B6) new URL() throws on a malformed value — never let a bad ?url= crash the page. */
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -29,6 +38,7 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [step, setStep] = useState(0); // staged progress (#2)
+  const [priorScore, setPriorScore] = useState<number | null>(null);
 
   useEffect(() => {
     if (!targetUrl) return;
@@ -46,15 +56,22 @@ function DashboardContent() {
         if (res.error) throw new Error(res.error);
         setData(res.data);
         setCompetitors(res.competitors || []);
-        // Persist to local history for trend comparison (#1).
+        // Persist to local history for trend comparison (#1). Read the prior
+        // score BEFORE overwriting it (B3) so the delta shown later is real.
+        // Skip entirely when the score is unmeasured (B5) — a null/0 write
+        // would corrupt future trend comparisons.
+        const measuredScore: number | null = res.data.technical?.mobileSpeedScore ?? null;
         try {
-          saveAudit({
-            url: res.data.url,
-            domain: res.data.domain,
-            score: res.data.technical?.mobileSpeedScore ?? 0,
-            competitors: (res.competitors || []).length,
-            timestamp: Date.now(),
-          });
+          setPriorScore(previousScore(res.data.url));
+          if (measuredScore != null) {
+            saveAudit({
+              url: res.data.url,
+              domain: res.data.domain,
+              score: measuredScore,
+              competitors: (res.competitors || []).length,
+              timestamp: Date.now(),
+            });
+          }
         } catch { /* non-fatal */ }
       })
       .catch(err => setError(err.message))
@@ -70,14 +87,14 @@ function DashboardContent() {
   if (loading) {
     return (
       <div className="flex min-h-screen bg-[var(--bg)]">
-        <Sidebar active="overview" domain={new URL(targetUrl).hostname} />
+        <Sidebar active="overview" domain={safeHostname(targetUrl)} />
         <div className="flex-1 min-w-0">
           <TopBar url={targetUrl} />
           <main className="p-6 max-w-[1200px] mx-auto">
             <div className="mb-4">
               <div className="text-sm text-[var(--ink-2)] flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 rounded-full bg-[var(--brand)] animate-pulse" />
-                Running analysis engine — {new URL(targetUrl).hostname}
+                Running analysis engine — {safeHostname(targetUrl)}
               </div>
               <div className="flex flex-wrap gap-2">
                 {['Crawl site & sitemap', 'Analyze competitors', 'Check speed & UX', 'AI synthesis'].map((label, i) => (
@@ -139,8 +156,8 @@ function DashboardContent() {
         <main className="p-6 max-w-[1200px] mx-auto flex flex-col gap-5">
           {/* KPI Row */}
           <section id="overview" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 scroll-mt-20">
-            <StatCard label="Mobile Speed" value={`${data.technical.mobileSpeedScore}/100`} icon={Gauge}
-              tone={data.technical.mobileSpeedScore > 80 ? 'brand' : data.technical.mobileSpeedScore > 50 ? 'amber' : 'red'} />
+            <StatCard label="Mobile Speed" value={data.technical.mobileSpeedScore != null ? `${data.technical.mobileSpeedScore}/100` : 'N/A'} icon={Gauge}
+              tone={data.technical.mobileSpeedScore == null ? 'amber' : data.technical.mobileSpeedScore > 80 ? 'brand' : data.technical.mobileSpeedScore > 50 ? 'amber' : 'red'} />
             <StatCard label="On-Page Links" value={totalLinks} icon={Link2} tone="blue" />
             <StatCard label="Words of Content" value={data.onPage.wordCount.toLocaleString()} icon={FileText} tone="brand" />
             <StatCard label="H1 Tags" value={data.onPage.h1Count} icon={Hash} tone="amber" />
@@ -164,7 +181,7 @@ function DashboardContent() {
               {data.synthesis.topCategoryScores && (
                 <div className="card p-6">
                   <h3 className="text-base font-bold text-center text-[var(--ink)] mb-2">SEO Health by Category</h3>
-                  <RadarChart scores={data.synthesis.topCategoryScores} />
+                  <RadarChart scores={data.synthesis.topCategoryScores} domain={data.domain} />
                 </div>
               )}
             </section>
@@ -172,7 +189,7 @@ function DashboardContent() {
 
           {/* Content Gap + Briefs */}
           {data.synthesis && (
-            <section className="flex flex-col gap-5">
+            <section id="content" className="flex flex-col gap-5 scroll-mt-20">
               {data.synthesis.contentGapBrief && (
                 <div className="card p-6">
                   <span className="bg-[var(--blue-soft)] text-[var(--blue)] text-xs px-3 py-1 rounded-full uppercase font-bold tracking-wide">Suggested Post</span>
@@ -194,6 +211,12 @@ function DashboardContent() {
             </section>
           )}
 
+          {/* Fallback anchors so sidebar nav always has a target, even when a
+              section is conditionally hidden (no synthesis/keywords/competitors data). */}
+          {!data.synthesis && <span id="content" className="scroll-mt-20" />}
+          {!data.synthesis?.keywordOpportunities && <span id="keywords" className="scroll-mt-20" />}
+          {competitors.length === 0 && <span id="competitors" className="scroll-mt-20" />}
+
           {/* Technical + CRO Grid */}
           <section className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
@@ -205,9 +228,13 @@ function DashboardContent() {
             <div className="flex flex-col">
               <div className="flex justify-between items-center py-2.5 border-b border-[var(--border)]">
                 <span className="text-sm text-[var(--ink-2)]">Lighthouse Mobile Speed</span>
-                <span className={`text-sm font-bold ${data.technical.mobileSpeedScore > 80 ? 'text-[var(--pass)]' : data.technical.mobileSpeedScore > 50 ? 'text-[var(--warn)]' : 'text-[var(--fail)]'}`}>
-                   {data.technical.mobileSpeedScore} / 100
-                </span>
+                {data.technical.mobileSpeedScore == null ? (
+                  <span className="text-sm font-bold text-[var(--ink-3)]">N/A</span>
+                ) : (
+                  <span className={`text-sm font-bold ${data.technical.mobileSpeedScore > 80 ? 'text-[var(--pass)]' : data.technical.mobileSpeedScore > 50 ? 'text-[var(--warn)]' : 'text-[var(--fail)]'}`}>
+                     {data.technical.mobileSpeedScore} / 100
+                  </span>
+                )}
               </div>
               <div className="flex justify-between items-center py-2.5 border-b border-[var(--border)]">
                 <span className="text-sm text-[var(--ink-2)]">HTTPS Secure</span>
@@ -400,7 +427,7 @@ function DashboardContent() {
 
           {/* Keyword Opportunities */}
           {data.synthesis?.keywordOpportunities && (
-            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+            <div id="keywords" className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 scroll-mt-20">
               <div className="md:col-span-1">
                  <KeywordIntentChart keywords={data.synthesis.keywordOpportunities} />
               </div>
@@ -412,7 +439,7 @@ function DashboardContent() {
 
           {/* Competitor Gap Analysis */}
           {competitors.length > 0 && (
-            <div className="md:col-span-2">
+            <div id="competitors" className="md:col-span-2 scroll-mt-20">
                <CompetitorGapTable targetDomain={data.domain} targetData={data} competitors={competitors} />
             </div>
           )}
@@ -447,10 +474,10 @@ function DashboardContent() {
           </section>
 
           {/* Action Plan Board & Content Calendar */}
-          <section className="flex flex-col gap-5">
+          <section id="reports" className="flex flex-col gap-5 scroll-mt-20">
             {data.synthesis?.contentCalendar && <ContentCalendar calendar={data.synthesis.contentCalendar} />}
             <ActionPlanBoard data={data} />
-            <EmailReport url={data.url} domain={data.domain} score={data.technical.mobileSpeedScore} />
+            <EmailReport url={data.url} domain={data.domain} score={data.technical.mobileSpeedScore} previousScore={priorScore} />
           </section>
         </main>
       </div>

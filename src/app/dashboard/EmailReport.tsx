@@ -2,9 +2,16 @@
 
 import { useState } from 'react';
 import { Mail, Loader2, CheckCircle2 } from 'lucide-react';
-import { previousScore } from '@/lib/history';
 
-export default function EmailReport({ url, domain, score }: { url: string; domain: string; score: number }) {
+interface EmailReportProps {
+  url: string;
+  domain: string;
+  /** null when PageSpeed didn't return a score (B5) — never send a fake 0. */
+  score: number | null;
+  previousScore: number | null;
+}
+
+export default function EmailReport({ url, domain, score, previousScore }: EmailReportProps) {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [msg, setMsg] = useState('');
@@ -17,7 +24,7 @@ export default function EmailReport({ url, domain, score }: { url: string; domai
       const res = await fetch('/api/email-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: email, url, domain, score, previousScore: previousScore(url) }),
+        body: JSON.stringify({ to: email, url, domain, score, previousScore }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'Failed to send');

@@ -10,6 +10,10 @@ export default function RecentAudits() {
   const [audits, setAudits] = useState<AuditRecord[]>([]);
 
   useEffect(() => {
+    // localStorage is only available client-side; reading it during render
+    // would cause a hydration mismatch, so this genuinely needs to happen
+    // post-mount rather than during render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAudits(getAudits());
   }, []);
 

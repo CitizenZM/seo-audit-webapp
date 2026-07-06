@@ -39,7 +39,8 @@ export default function ContentBriefs({ briefs }: { briefs: Array<Record<string,
               <div className="text-[10px] uppercase tracking-widest font-bold text-[var(--brand-ink)] mb-2">Recommended Outline</div>
               <div className="bg-[var(--surface-2)] border-l-[3px] border-[var(--brand)] rounded-r-lg p-4">
                  <ul className="space-y-1">
-                   {(brief.outline as unknown as string[]).map((point: string, pIdx: number) => (
+                   {/* Guard against a null/malformed outline from the AI response instead of crashing (B6-adjacent). */}
+                   {(Array.isArray(brief.outline) ? (brief.outline as string[]) : []).map((point: string, pIdx: number) => (
                       <li key={pIdx} className="text-sm text-[var(--ink-2)]">
                         {point.includes('H1') || point.includes('H2') ? 
                             <strong className="text-[var(--ink)]">{point}</strong> : 

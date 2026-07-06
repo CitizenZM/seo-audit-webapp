@@ -5,10 +5,17 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-export default function KeywordIntentChart({ keywords }: { keywords: any[] }) {
+interface Keyword {
+  keyword: string;
+  intent: string;
+  volume: string;
+  difficulty: string;
+}
+
+export default function KeywordIntentChart({ keywords }: { keywords: Keyword[] }) {
   if (!keywords || keywords.length === 0) return null;
 
-  const intentCounts = keywords.reduce((acc: any, kw: any) => {
+  const intentCounts = keywords.reduce<Record<string, number>>((acc, kw) => {
     acc[kw.intent] = (acc[kw.intent] || 0) + 1;
     return acc;
   }, {});

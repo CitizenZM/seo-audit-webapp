@@ -1,16 +1,19 @@
 /**
  * Real SERP intelligence (#4).
  *
- * Source order (best-effort, graceful):
- *  1. googlethis  — free scrape, no key (NOTE: v1.8.0's parser is frequently
- *     broken by Google HTML changes and may return 0 results).
- *  2. Serper.dev  — reliable Google Search API; set SERPER_API_KEY to enable.
+ * Source: Serper.dev (reliable Google Search API; set SERPER_API_KEY to enable).
+ *
+ * (B8) `googlethis` was tried first here, but its scraper returned 0 results
+ * against every test query (Google's HTML has moved on since that package was
+ * maintained) and its dependency tree carries several high-severity npm
+ * audit findings. It added risk with zero working functionality, so it was
+ * removed rather than kept as a "free" fallback that never actually fires.
  *
  * Returns null if no source yields data, so the dashboard simply hides the card.
  */
 export interface SerpResult {
   query: string;
-  source: 'serper' | 'googlethis';
+  source: 'serper';
   organic: { title: string; url: string; domain: string }[];
   relatedSearches: string[];
   peopleAlsoAsk: string[];
@@ -54,30 +57,7 @@ async function viaSerper(query: string): Promise<SerpResult | null> {
   }
 }
 
-async function viaGoogleThis(query: string): Promise<SerpResult | null> {
-  try {
-    const g = await import('googlethis');
-    const r = await g.search(query, {});
-    const organic = (r.results ?? []).slice(0, 10).map((x: { title: string; url: string }) => ({
-      title: x.title,
-      url: x.url,
-      domain: hostOf(x.url),
-    }));
-    if (!organic.length) return null;
-    return {
-      query,
-      source: 'googlethis',
-      organic,
-      relatedSearches: (r.people_also_search ?? []).map((x: { title?: string }) => x.title ?? '').filter(Boolean).slice(0, 8),
-      peopleAlsoAsk: (r.people_also_ask ?? []).slice(0, 6),
-    };
-  } catch {
-    return null;
-  }
-}
-
 export async function fetchSerp(query: string): Promise<SerpResult | null> {
   if (!query) return null;
-  // googlethis first (honors the no-key default), Serper as reliable fallback.
-  return (await viaGoogleThis(query)) ?? (await viaSerper(query));
+  return viaSerper(query);
 }

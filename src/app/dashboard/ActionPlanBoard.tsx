@@ -3,19 +3,33 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, AlertOctagon } from 'lucide-react';
 import OnPageIssuesTable from './OnPageIssuesTable';
 
-export default function ActionPlanBoard({ data }: { data: any }) {
+interface AuditData {
+  technical: { isHttps: boolean; hasSitemapXml: boolean; hasRobotsTxt: boolean; mobileSpeedScore: number | null };
+  onPage: { titleLength: number; metaDescLength: number; h1Count: number };
+  cro: { hasReviewsSchema: boolean };
+  synthesis?: { contentGapBrief?: { title: string } } | null;
+}
+
+type Priority = 'Critical' | 'High' | 'Medium' | 'Strategic';
+interface Action { priority: Priority; text: string; type: string }
+
+const PRIORITY_WEIGHT: Record<Priority, number> = { Critical: 4, High: 3, Strategic: 2, Medium: 1 };
+
+export default function ActionPlanBoard({ data }: { data: AuditData }) {
   if (!data) return null;
 
-  const actions = [];
-  const issuesList = [];
-  
+  const actions: Action[] = [];
+  const issuesList: { page: string; issue: string; severity: string; fix: string }[] = [];
+
   // 1. Technical actions
   if (!data.technical.isHttps) actions.push({ priority: 'Critical', text: 'Migrate site to HTTPS immediately to prevent security warnings and ranking penalties.', type: 'tech' });
   if (!data.technical.hasSitemapXml) {
     actions.push({ priority: 'High', text: 'Generate and submit an XML Sitemap to Google Search Console to improve indexation.', type: 'tech' });
     issuesList.push({ page: 'Global', issue: 'Missing sitemap.xml', severity: 'High', fix: 'Generate and submit an XML sitemap to Google Search Console.' });
   }
-  if (data.technical.mobileSpeedScore < 60) {
+  // Guard for null (PageSpeed unavailable) — `null < 60` would otherwise coerce
+  // to `0 < 60` and wrongly flag an unmeasured site as slow.
+  if (data.technical.mobileSpeedScore != null && data.technical.mobileSpeedScore < 60) {
     actions.push({ priority: 'High', text: `Optimize Core Web Vitals (Current Score: ${data.technical.mobileSpeedScore}/100) by compressing images and reducing unused JS/CSS.`, type: 'tech' });
     issuesList.push({ page: 'Global (Mobile)', issue: `Slow Mobile Load Speed (${data.technical.mobileSpeedScore}/100)`, severity: 'Critical', fix: 'Compress images, defer offscreen assets, minimize blocking scripts.' });
   }
@@ -42,12 +56,9 @@ export default function ActionPlanBoard({ data }: { data: any }) {
   }
   if (data.synthesis?.contentGapBrief) actions.push({ priority: 'Strategic', text: `Publish a new comprehensive pillar page: "${data.synthesis.contentGapBrief.title}" to target identified topic gaps.`, type: 'content' });
 
-  const quickWins = actions.filter(a => a.priority === 'Critical' || a.priority === 'High').slice(0, 6);
-  const strategic = actions.filter(a => a.priority !== 'Critical').slice(0, 6);
-
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden mt-6 mb-12">
-      
+
       {/* 1. On-Page Issues Table View */}
       <div className="px-6 border-b border-[var(--border)]">
          <OnPageIssuesTable issues={issuesList} />
@@ -61,16 +72,13 @@ export default function ActionPlanBoard({ data }: { data: any }) {
            <p className="text-sm text-[var(--muted)] mt-1">Consolidated checklist derived from Technical, On-Page, and Content Gap analyses.</p>
         </div>
       </div>
-      
+
       <div className="p-0">
         {actions.length === 0 ? (
            <div className="p-8 text-center text-[var(--pass)] font-bold">Incredible! No immediate technical or on-page issues detected!</div>
         ) : (
            <ul className="divide-y divide-[var(--border)]">
-             {actions.sort((a,b) => {
-               const pMap:any = { 'Critical': 4, 'High': 3, 'Strategic': 2, 'Medium': 1 };
-               return pMap[b.priority] - pMap[a.priority];
-             }).map((action, idx) => (
+             {actions.sort((a, b) => PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority]).map((action, idx) => (
                <li key={idx} className="p-5 flex items-start gap-4 hover:bg-[var(--surface-2)] transition-colors group">
                  <div className="mt-1">
                    {action.priority === 'Critical' && <AlertCircle className="text-[var(--fail)]" size={20}/>}
@@ -80,10 +88,10 @@ export default function ActionPlanBoard({ data }: { data: any }) {
                  </div>
                  <div className="flex-1">
                    <div className="flex items-center gap-3 mb-1">
-                     <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border 
-                        ${action.priority === 'Critical' ? 'bg-[rgba(231,76,60,0.1)] text-[#e74c3c] border-[#e74c3c]/30' : 
-                          action.priority === 'High' ? 'bg-[rgba(243,156,18,0.1)] text-[#f39c12] border-[#f39c12]/30' : 
-                          action.priority === 'Strategic' ? 'bg-[rgba(201,168,76,0.1)] text-[#C9A84C] border-[#C9A84C]/30' : 
+                     <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border
+                        ${action.priority === 'Critical' ? 'bg-[rgba(231,76,60,0.1)] text-[#e74c3c] border-[#e74c3c]/30' :
+                          action.priority === 'High' ? 'bg-[rgba(243,156,18,0.1)] text-[#f39c12] border-[#f39c12]/30' :
+                          action.priority === 'Strategic' ? 'bg-[rgba(201,168,76,0.1)] text-[#C9A84C] border-[#C9A84C]/30' :
                           'bg-[rgba(52,152,219,0.1)] text-[var(--blue)] border-[#3498db]/30'}`}>
                        {action.priority}
                      </span>

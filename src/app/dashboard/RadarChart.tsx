@@ -22,14 +22,15 @@ interface RadarChartProps {
     keywords: number;
     schema: number;
   };
+  domain?: string;
 }
 
-export default function RadarChart({ scores }: RadarChartProps) {
+export default function RadarChart({ scores, domain }: RadarChartProps) {
   const data = {
     labels: ['On-Page SEO', 'Technical', 'Content Depth', 'Backlinks', 'Keyword Coverage', 'Schema Markup'],
     datasets: [
       {
-        label: 'Tote&Carry',
+        label: domain || 'This site',
         data: [scores.onPage, scores.technical, scores.content, scores.links, scores.keywords, scores.schema],
         backgroundColor: 'rgba(22, 163, 74, 0.12)',
         borderColor: '#16a34a',

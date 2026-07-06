@@ -9,14 +9,6 @@ interface Issue {
   fix: string;
 }
 
-interface CompetitorData {
-  domain: string;
-  onPage: { wordCount: number, h1Count: number };
-  links: { internalCount: number, externalCount: number, indexedPagesApprox: number };
-  technical: { mobileSpeedScore: number };
-  cro: { hasCartOrCheckout: boolean, hasReviewsSchema: boolean };
-}
-
 export default function OnPageIssuesTable({ issues }: { issues: Issue[] }) {
   if (!issues || issues.length === 0) return null;
 

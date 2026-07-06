@@ -74,7 +74,8 @@ export interface SynthesisInput {
   metaDescription: string;
   h1Count: number;
   wordCount: number;
-  mobileSpeedScore: number;
+  /** null when PageSpeed didn't return a score — never a fake 0 (B5). */
+  mobileSpeedScore: number | null;
   hasCart: boolean;
   hasReviewsSchema: boolean;
   competitors: { domain: string; wordCount: number; h1Count: number; externalCount: number }[];
@@ -88,7 +89,7 @@ Title: ${input.title} (Length: ${input.titleLength})
 Meta Description: ${input.metaDescription}
 H1 Count: ${input.h1Count}
 Word Count: ${input.wordCount}
-Mobile Speed Score: ${input.mobileSpeedScore}/100
+Mobile Speed Score: ${input.mobileSpeedScore != null ? `${input.mobileSpeedScore}/100` : 'unavailable (PageSpeed API did not return a result — do not assume a value)'}
 Has Cart/Checkout: ${input.hasCart} | Has Reviews Schema: ${input.hasReviewsSchema}
 -----------------------
 COMPETITOR CONTEXT (if empty, disregard):
