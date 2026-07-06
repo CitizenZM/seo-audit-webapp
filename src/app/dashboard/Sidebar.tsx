@@ -1,9 +1,10 @@
 'use client';
 
-import { LayoutDashboard, Zap, Search, Users, FileText, BarChart3, Settings, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, Zap, Search, Users, FileText, BarChart3, Settings, HelpCircle, Sparkles } from 'lucide-react';
 
 const NAV = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'geo', label: 'AI Visibility', icon: Sparkles },
   { id: 'technical', label: 'Technical', icon: Zap },
   { id: 'keywords', label: 'Keywords', icon: Search },
   { id: 'competitors', label: 'Competitors', icon: Users },

@@ -4,6 +4,7 @@ import { generateSynthesis } from '@/lib/synthesis';
 import { fetchSerp } from '@/lib/serp';
 import { assertSafeUrl } from '@/lib/urlSafety';
 import { computeScore } from '@/lib/score';
+import { analyzeGeo } from '@/lib/geo';
 
 export type Stage = 'crawl' | 'competitors' | 'speed' | 'ai' | 'serp' | 'done';
 // Returns a Promise — callers MUST await it. An un-awaited progress write can
@@ -72,13 +73,28 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
 
   // 2. Parse HTML
   const $ = cheerio.load(html);
-  const title = $('title').text();
-  const metaDesc = $('meta[name="description"]').attr('content') || '';
+
+  // The document <title> from <head>, captured BEFORE we strip inline SVGs.
+  // `$('title')` matches every <title> in the DOM — including the <title>
+  // elements inside inline <svg> icons used as accessibility labels — and
+  // `.text()` concatenates them all. On real Shopify stores that produced a
+  // 181-char garbage title like "Tote&Carry® …\nAmazonApple Pay…icon-chevron".
+  // Scoping to head > title and collapsing whitespace fixes both the junk and
+  // the inflated titleLength. (Found via live audits of the test domains.)
+  const title = ($('head > title').first().text() || $('title').first().text())
+    .replace(/\s+/g, ' ')
+    .trim();
+  const metaDesc = ($('meta[name="description"]').attr('content') || '').replace(/\s+/g, ' ').trim();
+
+  // Strip non-content nodes — including inline <svg>, whose icon <title>/label
+  // text would otherwise contaminate H1 extraction and pad the word count.
+  $('script, style, noscript, svg').remove();
+
   const h1s = $('h1')
     .map((i, el) => $(el).text().trim())
-    .get();
+    .get()
+    .filter(Boolean);
 
-  $('script, style, noscript').remove();
   const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
   const wordCount = bodyText ? bodyText.split(' ').length : 0;
 
@@ -247,10 +263,11 @@ async function crawlSite(origin: string, homepageHtml: string, targetUrl: string
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const $ = cheerio.load(await res.text());
-      const title = $('title').text();
-      const metaDesc = $('meta[name="description"]').attr('content') || '';
+      // Same head>title + SVG-strip discipline as the main scrape (see above).
+      const title = ($('head > title').first().text() || $('title').first().text()).replace(/\s+/g, ' ').trim();
+      const metaDesc = ($('meta[name="description"]').attr('content') || '').replace(/\s+/g, ' ').trim();
+      $('script, style, noscript, svg').remove();
       const h1Count = $('h1').length;
-      $('script, style, noscript').remove();
       const wordCount = ($('body').text().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)).length;
       return { url, title, titleLen: title.length, metaLen: metaDesc.length, h1Count, wordCount };
     }),
@@ -345,7 +362,7 @@ export async function runAudit(
     mainAnalysis.onPage.title?.split(/[|\-–—]/)[0]?.trim() || mainAnalysis.domain;
 
   await onStage?.('speed');
-  const [siteCrawlResult, synthesis, serp] = await Promise.all([
+  const [siteCrawlResult, synthesis, serp, geo] = await Promise.all([
     crawlSite(origin, mainAnalysis._html, mainAnalysis.url).catch((e) => {
       console.warn('Site crawl skipped:', e instanceof Error ? e.message : e);
       return null;
@@ -375,6 +392,11 @@ export async function runAudit(
       await onStage?.('serp');
       return fetchSerp(serpQuery);
     })(),
+    // GEO — AI-visibility analysis (crawler access, llms.txt, no-JS content…).
+    analyzeGeo({ origin, html: mainAnalysis._html, schemaTypes: mainAnalysis.schema.types }).catch((e) => {
+      console.warn('GEO analysis skipped:', e instanceof Error ? e.message : e);
+      return null;
+    }),
   ]);
 
   // Strip the internal-only raw HTML before returning the response.
@@ -402,7 +424,9 @@ export async function runAudit(
       synthesis,
       siteCrawl: siteCrawlResult,
       serp,
+      geo,
       overallScore: scoreBreakdown.overall,
+      geoScore: geo?.score ?? null,
       scoreBreakdown: scoreBreakdown.components,
     },
     competitors: publicCompetitors,

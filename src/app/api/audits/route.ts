@@ -100,6 +100,7 @@ export async function POST(request: Request) {
           status: 'done',
           stage: 'done',
           overall_score: result.data.overallScore,
+          geo_score: result.data.geoScore,
           mobile_speed_score: result.data.technical.mobileSpeedScore,
           result_json: result,
           updated_at: new Date().toISOString(),

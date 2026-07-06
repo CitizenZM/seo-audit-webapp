@@ -2,10 +2,11 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Hash, Gauge, Search } from 'lucide-react';
+import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Hash, Gauge, Search, Sparkles } from 'lucide-react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import StatCard from './StatCard';
+import GeoCard from './GeoCard';
 import { saveAudit, previousScore } from '@/lib/history';
 import EmailReport from './EmailReport';
 import WatchlistCard from './WatchlistCard';
@@ -215,15 +216,20 @@ function DashboardContent() {
 
         <main className="p-6 max-w-[1200px] mx-auto flex flex-col gap-5">
           {/* KPI Row */}
-          <section id="overview" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5 scroll-mt-20">
+          <section id="overview" className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-5 scroll-mt-20">
             <StatCard label="Overall SEO Score" value={typeof data.overallScore === 'number' ? `${data.overallScore}/100` : 'N/A'} icon={Search}
               tone={data.overallScore == null ? 'amber' : data.overallScore > 80 ? 'brand' : data.overallScore > 50 ? 'amber' : 'red'} />
+            <StatCard label="AI Visibility (GEO)" value={typeof data.geoScore === 'number' ? `${data.geoScore}/100` : 'N/A'} icon={Sparkles}
+              tone={data.geoScore == null ? 'amber' : data.geoScore > 80 ? 'brand' : data.geoScore > 50 ? 'amber' : 'red'} />
             <StatCard label="Mobile Speed" value={data.technical.mobileSpeedScore != null ? `${data.technical.mobileSpeedScore}/100` : 'N/A'} icon={Gauge}
               tone={data.technical.mobileSpeedScore == null ? 'amber' : data.technical.mobileSpeedScore > 80 ? 'brand' : data.technical.mobileSpeedScore > 50 ? 'amber' : 'red'} />
             <StatCard label="On-Page Links" value={totalLinks} icon={Link2} tone="blue" />
             <StatCard label="Words of Content" value={data.onPage.wordCount.toLocaleString()} icon={FileText} tone="brand" />
             <StatCard label="H1 Tags" value={data.onPage.h1Count} icon={Hash} tone="amber" />
           </section>
+
+          {/* GEO — AI visibility (headline new capability) */}
+          {data.geo && <GeoCard geo={data.geo} />}
 
           {/* Executive Summary from AI Synthesis */}
           {data.synthesis && (
@@ -275,6 +281,7 @@ function DashboardContent() {
 
           {/* Fallback anchors so sidebar nav always has a target, even when a
               section is conditionally hidden (no synthesis/keywords/competitors data). */}
+          {!data.geo && <span id="geo" className="scroll-mt-20" />}
           {!data.synthesis && <span id="content" className="scroll-mt-20" />}
           {!data.synthesis?.keywordOpportunities && <span id="keywords" className="scroll-mt-20" />}
           {competitors.length === 0 && <span id="competitors" className="scroll-mt-20" />}
