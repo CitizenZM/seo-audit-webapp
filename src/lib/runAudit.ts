@@ -220,21 +220,60 @@ export function normalizeUrl(raw: string): string {
  * fetch (fast, no per-page PageSpeed) and is fully best-effort — any failure
  * just shrinks the sample rather than aborting the audit.
  */
+/** URLs that aren't real HTML pages and would pollute the page-health sample. */
+function looksLikeHtmlPage(url: string): boolean {
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    return !/\.(xml|json|txt|jpe?g|png|gif|webp|svg|pdf|css|js|ico|mp4|webm|xml\.gz|gz)$/.test(path);
+  } catch {
+    return false;
+  }
+}
+
+/** Fetch a sitemap and return its <loc> entries plus whether it's an index. */
+async function readSitemap(url: string): Promise<{ locs: string[]; isIndex: boolean }> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) return { locs: [], isIndex: false };
+  const xml = await res.text();
+  const $x = cheerio.load(xml, { xmlMode: true });
+  // A sitemap index wraps child sitemaps in <sitemap>; a normal sitemap uses <url>.
+  const isIndex = $x('sitemapindex').length > 0 || $x('sitemap > loc').length > 0;
+  const locs: string[] = [];
+  $x('loc').each((_, el) => {
+    const loc = $x(el).text().trim();
+    if (loc) locs.push(loc);
+  });
+  return { locs, isIndex };
+}
+
 async function crawlSite(origin: string, homepageHtml: string, targetUrl: string) {
   const MAX_PAGES = 8;
   const domain = new URL(origin).hostname;
   const urls = new Set<string>();
 
-  // 1. Prefer sitemap.xml
+  // 1. Prefer sitemap.xml — recursing one level into a sitemap index so we
+  //    collect actual page URLs, not the child-sitemap .xml files themselves.
+  //    (Without this, sites like Shopify whose /sitemap.xml is an index got
+  //    their nested sitemap XML files sampled as if they were pages — every
+  //    one reads as h1=0/no-meta, badly skewing the "pages missing …" stats.)
   try {
-    const res = await fetch(`${origin}/sitemap.xml`, { signal: AbortSignal.timeout(8000) });
-    if (res.ok) {
-      const xml = await res.text();
-      const $x = cheerio.load(xml, { xmlMode: true });
-      $x('loc').each((_, el) => {
-        const loc = $x(el).text().trim();
-        if (loc) urls.add(loc);
-      });
+    const root = await readSitemap(`${origin}/sitemap.xml`);
+    if (root.isIndex) {
+      // Fetch a handful of child sitemaps and gather their page URLs.
+      const children = root.locs.filter((l) => looksLikeHtmlPage(l) === false).slice(0, 5);
+      const childResults = await Promise.allSettled(children.map((c) => readSitemap(c)));
+      for (const r of childResults) {
+        if (r.status === 'fulfilled') {
+          for (const loc of r.value.locs) {
+            if (looksLikeHtmlPage(loc)) urls.add(loc);
+            if (urls.size >= MAX_PAGES * 3) break;
+          }
+        }
+      }
+    } else {
+      for (const loc of root.locs) {
+        if (looksLikeHtmlPage(loc)) urls.add(loc);
+      }
     }
   } catch {
     /* no sitemap — fall back to links below */
@@ -248,7 +287,7 @@ async function crawlSite(origin: string, homepageHtml: string, targetUrl: string
       if (!href) return;
       try {
         const u = new URL(href, targetUrl);
-        if (u.hostname === domain) urls.add(u.href.split('#')[0]);
+        if (u.hostname === domain && looksLikeHtmlPage(u.href)) urls.add(u.href.split('#')[0]);
       } catch { /* ignore */ }
     });
   }
