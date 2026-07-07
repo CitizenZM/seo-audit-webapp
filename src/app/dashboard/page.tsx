@@ -215,6 +215,18 @@ function DashboardContent() {
         <TopBar url={data.url} />
 
         <main className="p-6 max-w-[1200px] mx-auto flex flex-col gap-5">
+          {/* Print-only report cover header. Hidden on screen (the TopBar covers
+              that); shown when exporting to PDF, where the TopBar is stripped. */}
+          <div className="print-header">
+            <div className="print-brand">SEO &amp; GEO Audit Report</div>
+            <div className="print-url">{data.url}</div>
+            <div className="print-meta">
+              Overall SEO {typeof data.overallScore === 'number' ? `${data.overallScore}/100` : 'N/A'}
+              {'  ·  '}AI Visibility (GEO) {typeof data.geoScore === 'number' ? `${data.geoScore}/100` : 'N/A'}
+              {'  ·  '}Generated {new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
+          </div>
+
           {/* KPI Row */}
           <section id="overview" className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-5 scroll-mt-20">
             <StatCard label="Overall SEO Score" value={typeof data.overallScore === 'number' ? `${data.overallScore}/100` : 'N/A'} icon={Search}
