@@ -1,12 +1,77 @@
 'use client';
 
+import { useState } from 'react';
+import { PenLine, Loader2, Copy, Check } from 'lucide-react';
+
+/** Per-brief "Generate draft" action (Gumshoe "Act → Content generation"). */
+function GenerateDraft({ brief }: { brief: Record<string, unknown> }) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [draft, setDraft] = useState('');
+  const [msg, setMsg] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  async function generate() {
+    setStatus('loading');
+    setMsg('');
+    try {
+      const res = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: String(brief.title ?? ''),
+          targetKeyword: String(brief.targetKeyword ?? ''),
+          goal: String(brief.goal ?? ''),
+          outline: Array.isArray(brief.outline) ? brief.outline : [],
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'Generation failed');
+      setDraft(j.draft);
+      setStatus('done');
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Generation failed');
+      setStatus('error');
+    }
+  }
+
+  return (
+    <div className="mt-4">
+      {status !== 'done' && (
+        <button
+          onClick={generate}
+          disabled={status === 'loading'}
+          className="no-print flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[var(--brand)] text-white text-sm font-semibold hover:brightness-95 transition-all disabled:opacity-60"
+        >
+          {status === 'loading' ? <Loader2 size={15} className="animate-spin" /> : <PenLine size={15} />}
+          {status === 'loading' ? 'Writing draft…' : 'Generate draft'}
+        </button>
+      )}
+      {status === 'error' && <p className="text-xs text-[var(--fail)] mt-2">{msg}</p>}
+      {status === 'done' && (
+        <div className="rounded-xl bg-[var(--surface-2)] border border-[var(--border)] p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs uppercase tracking-wider font-bold text-[var(--brand-ink)]">Generated draft</span>
+            <button
+              onClick={() => { navigator.clipboard?.writeText(draft); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+              className="no-print flex items-center gap-1 text-xs font-medium text-[var(--ink-2)] hover:text-[var(--ink)]"
+            >
+              {copied ? <Check size={13} className="text-[var(--pass)]" /> : <Copy size={13} />} {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <pre className="text-sm text-[var(--ink-2)] whitespace-pre-wrap font-sans max-h-96 overflow-y-auto">{draft}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ContentBriefs({ briefs }: { briefs: Array<Record<string, unknown>> }) {
   if (!briefs || briefs.length === 0) return null;
 
   return (
-    <div className="mt-8">
+    <div id="content-generation" className="mt-8 scroll-mt-20">
       <h3 className="text-xl font-bold text-[var(--ink)] mb-2">Content Briefs — Top Keyword Opportunities</h3>
-      <p className="text-sm text-[var(--muted)] mb-6">Ready-to-brief content specs. Hand each brief to a writer with these requirements.</p>
+      <p className="text-sm text-[var(--muted)] mb-6">Ready-to-brief content specs — or generate a publish-ready draft in one click.</p>
 
       <div className="space-y-6">
         {briefs.map((brief, idx) => (
@@ -51,6 +116,8 @@ export default function ContentBriefs({ briefs }: { briefs: Array<Record<string,
                  </ul>
               </div>
             </div>
+
+            <GenerateDraft brief={brief} />
 
           </div>
         ))}

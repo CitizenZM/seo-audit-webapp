@@ -306,15 +306,30 @@ async function crawlSite(origin: string, homepageHtml: string, targetUrl: string
       // Same head>title + SVG-strip discipline as the main scrape (see above).
       const title = ($('head > title').first().text() || $('title').first().text()).replace(/\s+/g, ' ').trim();
       const metaDesc = ($('meta[name="description"]').attr('content') || '').replace(/\s+/g, ' ').trim();
+      const hasJsonLd = $('script[type="application/ld+json"]').length > 0;
       $('script, style, noscript, svg').remove();
       const h1Count = $('h1').length;
       const wordCount = ($('body').text().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)).length;
-      return { url, title, titleLen: title.length, metaLen: metaDesc.length, h1Count, wordCount };
+      // Question-style headings — the content shape LLMs extract most cleanly.
+      const qHeadings = $('h2, h3').filter((_, el) =>
+        /^(how|what|why|when|where|which|who|can|does|do|is|are|should|will)\b|\?\s*$/i.test($(el).text().trim()),
+      ).length;
+      // Per-page AI Optimization score (Gumshoe-style page-by-page audit):
+      // machine-readable facts, one clear H1, described in meta, substantive
+      // content, and answer-shaped headings.
+      const aiScore = Math.round(
+        (hasJsonLd ? 30 : 0) +
+        (h1Count === 1 ? 20 : 0) +
+        (metaDesc.length >= 50 ? 20 : 0) +
+        (wordCount >= 300 ? 20 : Math.min(20, (wordCount / 300) * 20)) +
+        (qHeadings > 0 ? 10 : 0),
+      );
+      return { url, title, titleLen: title.length, metaLen: metaDesc.length, h1Count, wordCount, aiScore };
     }),
   );
 
   const ok = pages
-    .filter((p): p is PromiseFulfilledResult<Awaited<ReturnType<() => Promise<{ url: string; title: string; titleLen: number; metaLen: number; h1Count: number; wordCount: number }>>>> => p.status === 'fulfilled')
+    .filter((p): p is PromiseFulfilledResult<{ url: string; title: string; titleLen: number; metaLen: number; h1Count: number; wordCount: number; aiScore: number }> => p.status === 'fulfilled')
     .map((p) => p.value);
 
   const analyzed = ok.length;
@@ -327,7 +342,7 @@ async function crawlSite(origin: string, homepageHtml: string, targetUrl: string
     pagesMissingH1: ok.filter((p) => p.h1Count === 0).length,
     pagesMultipleH1: ok.filter((p) => p.h1Count > 1).length,
     thinContentPages: ok.filter((p) => p.wordCount < 300).length,
-    sample: ok.map((p) => ({ url: p.url, title: p.title || '(missing)', words: p.wordCount, h1: p.h1Count, hasMeta: p.metaLen > 0 })),
+    sample: ok.map((p) => ({ url: p.url, title: p.title || '(missing)', words: p.wordCount, h1: p.h1Count, hasMeta: p.metaLen > 0, aiScore: p.aiScore })),
   };
 }
 

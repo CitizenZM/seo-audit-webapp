@@ -3,20 +3,19 @@
 import { useState } from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js';
-import { AlertCircle, Eye, ChevronDown, ChevronUp, MessageSquare, KeyRound } from 'lucide-react';
+import { AlertCircle, Eye, ChevronDown, ChevronUp, MessageSquare, KeyRound, Bot, UserRound, Tags, Smile } from 'lucide-react';
 import type { VisibilityResult } from '@/lib/visibility';
 
 ChartJS.register(ArcElement, Tooltip);
 
 /**
- * Brand Visibility hero — Gumshoe-style "Visibility audit" section:
- * donut % + low-visibility warning banner + competitive leaderboard +
- * expandable per-prompt conversation results.
+ * Brand Visibility hero — Gumshoe-style "Visibility audit":
+ * donut % · low-visibility banner · competitive leaderboard · per-model /
+ * per-persona / per-topic slices · brand perception · probed conversations.
  */
 export default function VisibilityCard({ visibility, domain }: { visibility: VisibilityResult | null; domain: string }) {
   const [showPrompts, setShowPrompts] = useState(false);
 
-  // Not configured — show setup state rather than fake numbers.
   if (!visibility) {
     return (
       <div id="visibility" className="card p-6 scroll-mt-20">
@@ -26,11 +25,12 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
         <div className="flex items-start gap-3 rounded-xl bg-[var(--amber-soft)] border border-[var(--amber)]/20 p-4">
           <KeyRound size={18} className="text-[var(--amber)] mt-0.5 shrink-0" />
           <p className="text-sm text-[var(--ink-2)]">
-            Visibility probing asks a real AI assistant consumer questions in your category and measures how often
-            your brand is recommended. Set <code className="text-xs bg-[var(--surface-2)] px-1.5 py-0.5 rounded">ANTHROPIC_API_KEY</code> on
+            Visibility probing asks real AI assistants consumer questions in your category and measures how often
+            your brand is recommended. Set <code className="text-xs bg-[var(--surface-2)] px-1.5 py-0.5 rounded">OPENAI_API_KEY</code> on
             the deployment to enable it.
           </p>
         </div>
+        <span id="personas" className="scroll-mt-20" />
       </div>
     );
   }
@@ -41,12 +41,29 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
 
   const donut = {
     labels: ['Visible', 'Not mentioned'],
-    datasets: [{
-      data: [pct, 100 - pct],
-      backgroundColor: [tone, '#eceef2'],
-      borderWidth: 0,
-    }],
+    datasets: [{ data: [pct, 100 - pct], backgroundColor: [tone, '#eceef2'], borderWidth: 0 }],
   };
+
+  const sentimentTone: Record<string, string> = {
+    positive: 'var(--pass)', neutral: 'var(--ink-3)', mixed: 'var(--warn)', negative: 'var(--fail)', not_discussed: 'var(--ink-3)',
+  };
+
+  const sliceBlock = (title: string, icon: React.ReactNode, slices: { label: string; visibilityPct: number; prompts: number }[], id?: string) => (
+    <div id={id} className={id ? 'scroll-mt-20' : undefined}>
+      <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold text-[var(--ink-3)] mb-2">{icon}{title}</div>
+      <div className="flex flex-col gap-1.5">
+        {slices.map((s) => (
+          <div key={s.label} className="flex items-center gap-2">
+            <span className="text-sm text-[var(--ink-2)] w-40 truncate shrink-0" title={s.label}>{s.label}</span>
+            <div className="flex-1 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${Math.max(2, s.visibilityPct)}%`, background: s.visibilityPct >= 40 ? 'var(--brand)' : s.visibilityPct >= 10 ? 'var(--amber)' : 'var(--red)' }} />
+            </div>
+            <span className="text-sm font-semibold text-[var(--ink)] w-10 text-right shrink-0">{s.visibilityPct}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div id="visibility" className="card p-6 scroll-mt-20">
@@ -56,12 +73,12 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
             <Eye size={18} className="text-[var(--brand)]" /> Brand Visibility in AI Answers
           </h3>
           <p className="text-sm text-[var(--ink-3)] mt-0.5 max-w-xl">
-            {visibility.totalPrompts} consumer prompts probed · {visibility.brandsSeen} brands mentioned across the answers.
+            {visibility.totalPrompts} answers probed across {visibility.models.length} model{visibility.models.length === 1 ? '' : 's'} ·{' '}
+            {visibility.brandsSeen} brands mentioned.
           </p>
         </div>
       </div>
 
-      {/* Low-visibility warning banner (Gumshoe-style) */}
       {low && (
         <div className="flex items-start gap-3 rounded-xl bg-[var(--amber-soft)] border border-[var(--amber)]/25 p-4 mb-5">
           <AlertCircle size={18} className="text-[var(--amber)] mt-0.5 shrink-0" />
@@ -76,21 +93,43 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Donut */}
-        <div className="flex items-center gap-6">
-          <div className="relative w-36 h-36 shrink-0">
-            <Doughnut data={donut} options={{ cutout: '74%', plugins: { legend: { display: false }, tooltip: { enabled: false } } }} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-extrabold" style={{ color: tone }}>{pct}%</span>
+        {/* Donut + perception */}
+        <div>
+          <div className="flex items-center gap-6">
+            <div className="relative w-36 h-36 shrink-0">
+              <Doughnut data={donut} options={{ cutout: '74%', plugins: { legend: { display: false }, tooltip: { enabled: false } } }} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-3xl font-extrabold" style={{ color: tone }}>{pct}%</span>
+              </div>
+            </div>
+            <div className="text-sm text-[var(--ink-2)]">
+              <span className="font-semibold text-[var(--ink)]">{visibility.targetBrand}</span> appeared in{' '}
+              <span className="font-semibold" style={{ color: tone }}>
+                {visibility.prompts.filter((p) => p.mentioned).length} of {visibility.totalPrompts}
+              </span>{' '}
+              AI answers to real buyer questions.
             </div>
           </div>
-          <div className="text-sm text-[var(--ink-2)]">
-            <span className="font-semibold text-[var(--ink)]">{visibility.targetBrand}</span> appeared in{' '}
-            <span className="font-semibold" style={{ color: tone }}>
-              {visibility.prompts.filter((p) => p.mentioned).length} of {visibility.totalPrompts}
-            </span>{' '}
-            AI answers to category questions a real buyer would ask.
-          </div>
+
+          {/* Brand perception */}
+          {visibility.perception && (
+            <div className="mt-4 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] p-4">
+              <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold text-[var(--ink-3)] mb-1.5">
+                <Smile size={13} /> AI Brand Perception
+                <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ color: '#fff', background: sentimentTone[visibility.perception.sentiment] ?? 'var(--ink-3)' }}>
+                  {visibility.perception.sentiment.replace('_', ' ')}
+                </span>
+              </div>
+              <p className="text-sm text-[var(--ink-2)]">{visibility.perception.summary}</p>
+              {visibility.perception.descriptors.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {visibility.perception.descriptors.map((d) => (
+                    <span key={d} className="text-xs px-2 py-0.5 rounded-full bg-[var(--surface)] border border-[var(--border)] text-[var(--ink-2)]">{d}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Competitive leaderboard */}
@@ -117,7 +156,25 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
         </div>
       </div>
 
-      {/* Per-prompt conversations (expandable) */}
+      {/* Slices: model / persona / topic */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 pt-5 border-t border-[var(--border)]">
+        {sliceBlock('Model visibility', <Bot size={13} />, visibility.models)}
+        {sliceBlock('Persona visibility', <UserRound size={13} />, visibility.personas, 'personas')}
+        {sliceBlock('Topic visibility', <Tags size={13} />, visibility.topics)}
+      </div>
+
+      {/* Persona definitions */}
+      {visibility.personaDefs.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {visibility.personaDefs.map((p) => (
+            <span key={p.name} className="text-xs px-2.5 py-1 rounded-full bg-[var(--surface-2)] border border-[var(--border)] text-[var(--ink-2)]" title={p.description}>
+              <span className="font-semibold text-[var(--ink)]">{p.name}</span> — {p.description}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Per-prompt conversations */}
       <button
         onClick={() => setShowPrompts((s) => !s)}
         className="no-print mt-5 flex items-center gap-2 text-sm font-medium text-[var(--brand-ink)] hover:underline"
@@ -135,6 +192,7 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
                   ? <span className="text-xs font-semibold text-[var(--pass)] shrink-0">Mentioned ✓</span>
                   : <span className="text-xs font-semibold text-[var(--fail)] shrink-0">Not mentioned</span>}
               </div>
+              <div className="text-[11px] text-[var(--ink-3)] mt-1">{p.model} · {p.persona} · {p.topic}</div>
               {p.brands.length > 0 && (
                 <div className="text-xs text-[var(--ink-3)] mt-1 truncate">Brands in answer: {p.brands.join(', ')}</div>
               )}
@@ -142,7 +200,7 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
           ))}
         </ul>
       )}
-      <p className="text-[11px] text-[var(--ink-3)] mt-3">Probed against Claude (claude-haiku). Domain: {domain}</p>
+      <p className="text-[11px] text-[var(--ink-3)] mt-3">Models probed: {visibility.models.map((m) => m.label).join(', ')} · Domain: {domain}</p>
     </div>
   );
 }

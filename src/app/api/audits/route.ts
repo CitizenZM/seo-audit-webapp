@@ -19,6 +19,35 @@ export const maxDuration = 60;
  * polling to work against, so this degrades to the old single-request
  * behavior rather than hanging forever.
  */
+/**
+ * Audit history for a URL (Trends): GET /api/audits?url=… returns the recent
+ * completed audits' headline scores, oldest first, for trend charting.
+ */
+export async function GET(request: Request) {
+  if (!isSupabaseConfigured()) return NextResponse.json({ history: [] });
+  const url = new URL(request.url).searchParams.get('url');
+  if (!url) return NextResponse.json({ error: 'url parameter required' }, { status: 400 });
+
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from('seo_audits')
+    .select('created_at, overall_score, geo_score, visibility_pct')
+    .eq('url', normalizeUrl(url))
+    .eq('status', 'done')
+    .order('created_at', { ascending: true })
+    .limit(30);
+
+  if (error) return NextResponse.json({ error: 'Failed to load history' }, { status: 500 });
+  return NextResponse.json({
+    history: (data ?? []).map((r) => ({
+      date: r.created_at,
+      overall: r.overall_score,
+      geo: r.geo_score,
+      visibility: r.visibility_pct,
+    })),
+  });
+}
+
 export async function POST(request: Request) {
   const limit = rateLimit(`analyze:${clientIp(request)}`, 5, 5 * 60 * 1000);
   if (!limit.allowed) {

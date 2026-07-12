@@ -8,6 +8,8 @@ import TopBar from './TopBar';
 import StatCard from './StatCard';
 import GeoCard from './GeoCard';
 import VisibilityCard from './VisibilityCard';
+import CitationsCard from './CitationsCard';
+import TrendsCard from './TrendsCard';
 import { saveAudit, previousScore } from '@/lib/history';
 import EmailReport from './EmailReport';
 import WatchlistCard from './WatchlistCard';
@@ -245,6 +247,14 @@ function DashboardContent() {
           {/* Brand Visibility — Gumshoe-style visibility audit (headline section) */}
           <VisibilityCard visibility={data.visibility ?? null} domain={data.domain} />
 
+          {/* Citation audit — which domains AI models cite in this category */}
+          {data.visibility?.citations?.length > 0 && (
+            <CitationsCard citations={data.visibility.citations} domain={data.domain} />
+          )}
+
+          {/* Trends — score history for this URL */}
+          <TrendsCard url={data.url} />
+
           {/* GEO — AI crawler access & readiness */}
           {data.geo && <GeoCard geo={data.geo} />}
 
@@ -300,8 +310,9 @@ function DashboardContent() {
               section is conditionally hidden (no synthesis/keywords/competitors data). */}
           {!data.geo && <span id="geo" className="scroll-mt-20" />}
           {!data.visibility && <span id="leaderboard" className="scroll-mt-20" />}
-          {!(data.serp && data.serp.organic?.length > 0) && <span id="citations" className="scroll-mt-20" />}
+          {!(data.visibility?.citations?.length > 0) && <span id="citations" className="scroll-mt-20" />}
           {!data.synthesis && <span id="content" className="scroll-mt-20" />}
+          {!data.synthesis?.contentBriefs?.length && <span id="content-generation" className="scroll-mt-20" />}
           {!data.synthesis?.keywordOpportunities && <span id="keywords" className="scroll-mt-20" />}
           {competitors.length === 0 && <span id="competitors" className="scroll-mt-20" />}
 
@@ -445,17 +456,23 @@ function DashboardContent() {
                       <th className="px-4 py-3">Title</th>
                       <th className="px-4 py-3">Words</th>
                       <th className="px-4 py-3">H1</th>
-                      <th className="px-4 py-3 rounded-r-lg">Meta</th>
+                      <th className="px-4 py-3">Meta</th>
+                      <th className="px-4 py-3 rounded-r-lg">AI Score</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.siteCrawl.sample.map((p: { url: string; title: string; words: number; h1: number; hasMeta: boolean }, i: number) => (
+                    {data.siteCrawl.sample.map((p: { url: string; title: string; words: number; h1: number; hasMeta: boolean; aiScore?: number }, i: number) => (
                       <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
                         <td className="px-4 py-3 text-[var(--blue)] max-w-[200px] truncate">{p.url.replace(/^https?:\/\/[^/]+/, '') || '/'}</td>
                         <td className="px-4 py-3 text-[var(--ink-2)] max-w-[260px] truncate">{p.title}</td>
                         <td className="px-4 py-3 text-[var(--ink-2)] font-mono">{p.words}</td>
                         <td className="px-4 py-3"><span className={p.h1 === 1 ? 'text-[var(--pass)]' : 'text-[var(--fail)]'}>{p.h1}</span></td>
                         <td className="px-4 py-3">{p.hasMeta ? <CheckCircle2 size={16} className="text-[var(--pass)]" /> : <XCircle size={16} className="text-[var(--fail)]" />}</td>
+                        <td className="px-4 py-3">
+                          {typeof p.aiScore === 'number'
+                            ? <span className={`font-semibold ${p.aiScore >= 70 ? 'text-[var(--pass)]' : p.aiScore >= 40 ? 'text-[var(--warn)]' : 'text-[var(--fail)]'}`}>{p.aiScore}</span>
+                            : <span className="text-[var(--ink-3)]">—</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -466,7 +483,7 @@ function DashboardContent() {
 
           {/* Live SERP Intelligence (#4) */}
           {data.serp && data.serp.organic?.length > 0 && (
-            <div id="citations" className="md:col-span-2 card p-6 scroll-mt-20">
+            <div className="md:col-span-2 card p-6">
               <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                 <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
                   <Search size={18} className="text-[var(--brand)]" /> Live SERP — who ranks for &ldquo;{data.serp.query}&rdquo;

@@ -2,7 +2,7 @@
 
 import {
   LayoutDashboard, Zap, Search, Users, FileText, BarChart3, Settings, HelpCircle,
-  Sparkles, Eye, Trophy, Quote, PenLine, UserRound,
+  Sparkles, Eye, Trophy, Quote, PenLine, UserRound, TrendingUp,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -27,6 +27,7 @@ const GROUPS: { label: string | null; items: { id: string; label: string; icon: 
       { id: 'leaderboard', label: 'Competitive leaderboard', icon: Trophy },
       { id: 'geo', label: 'AI crawlers & GEO', icon: Sparkles },
       { id: 'citations', label: 'Citation audit', icon: Quote },
+      { id: 'trends', label: 'Trends', icon: TrendingUp },
       { id: 'keywords', label: 'Keywords', icon: Search },
     ],
   },
@@ -42,8 +43,8 @@ const GROUPS: { label: string | null; items: { id: string; label: string; icon: 
   {
     label: 'Configure',
     items: [
-      { id: 'personas', label: 'Personas', icon: UserRound, soon: true },
-      { id: 'content-generation', label: 'Content generation', icon: PenLine, soon: true },
+      { id: 'personas', label: 'Personas', icon: UserRound },
+      { id: 'content-generation', label: 'Content generation', icon: PenLine },
     ],
   },
 ];

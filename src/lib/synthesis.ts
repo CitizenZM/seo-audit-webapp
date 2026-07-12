@@ -1,6 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
+import { openaiClient, OPENAI_MODEL } from '@/lib/ai';
 
 /**
  * Zod schema for the AI synthesis. The dashboard consumes every field here,
@@ -102,29 +102,30 @@ Based strictly on this data, produce an SEO analysis. Requirements:
 }
 
 /**
- * Generate the AI synthesis using Claude with structured outputs.
- * messages.parse() validates the response against the Zod schema automatically.
+ * Generate the AI synthesis using OpenAI with structured outputs
+ * (zodResponseFormat validates the response against the Zod schema).
  * Returns null if synthesis cannot be produced (the route degrades gracefully).
  */
 export async function generateSynthesis(input: SynthesisInput): Promise<Synthesis | null> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('ANTHROPIC_API_KEY is not set; skipping AI synthesis.');
+  const client = openaiClient();
+  if (!client) {
+    console.error('OPENAI_API_KEY is not set; skipping AI synthesis.');
     return null;
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const prompt = buildPrompt(input);
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const response = await client.messages.parse({
-        model: 'claude-haiku-4-5',
+      const response = await client.chat.completions.parse({
+        model: OPENAI_MODEL,
         max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(SynthesisSchema) },
+        response_format: zodResponseFormat(SynthesisSchema, 'synthesis'),
       });
 
-      if (response.parsed_output) return response.parsed_output;
+      const parsed = response.choices[0]?.message?.parsed;
+      if (parsed) return parsed;
       console.error(`Synthesis returned no parsed output (attempt ${attempt + 1})`);
     } catch (e) {
       console.error(`Synthesis error (attempt ${attempt + 1}):`, e);

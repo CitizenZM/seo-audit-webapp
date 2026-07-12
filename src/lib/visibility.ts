@@ -1,66 +1,69 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { openaiClient, OPENAI_MODEL } from '@/lib/ai';
 
 /**
- * Brand Visibility engine — the core Gumshoe/Profound metric.
+ * Brand Visibility engine v2 — Gumshoe/Profound-style AI answer analysis.
  *
- * Instead of asking "does Google rank you?", this asks the question AI-era
- * buyers actually trigger: "when a consumer asks an AI assistant for
- * recommendations in your category, does your brand come up — and who does?"
- *
- * How it works (same shape as Gumshoe's Visibility Audit):
- *  1. Generate N consumer-style prompts from the site's category/keywords
- *     ("best aero kits for Subaru", "top luggage brands", …).
- *  2. Run each prompt against a real LLM (Claude) exactly as a consumer would.
- *  3. Extract every brand mentioned in each answer.
- *  4. Visibility % = share of prompts where the target brand appeared.
- *     The aggregated brand counts become the Competitive Leaderboard.
- *
- * Cost: N (default 8) claude-haiku calls per audit — cents. Requires
- * ANTHROPIC_API_KEY; returns null without it so the dashboard shows a
- * "connect a key" state instead of fake numbers.
+ * Pipeline per audit:
+ *  1. Generate 3 buyer personas for the site's category (1 AI call).
+ *  2. Build a prompt set: per-persona buyer questions + generic category
+ *     questions, each tagged with a topic bucket.
+ *  3. Probe every prompt against each configured model (OpenAI always;
+ *     Claude too when ANTHROPIC_API_KEY is present) exactly as a consumer
+ *     would ask — the model is never told which brand we're measuring.
+ *  4. Each answer yields: brands mentioned + sources/domains the model would
+ *     cite. Aggregations produce: overall visibility %, per-model slice,
+ *     per-persona slice, per-topic slice, competitive leaderboard, and a
+ *     citation-domain leaderboard (digital-PR targeting).
+ *  5. If the brand was mentioned anywhere, one final call summarizes how the
+ *     models characterized it (sentiment + descriptors) — brand perception.
  */
 
 export interface PromptResult {
   prompt: string;
+  persona: string;
+  topic: string;
+  model: string;
   mentioned: boolean;
   brands: string[];
+  citations: string[];
 }
 
-export interface LeaderboardEntry {
-  brand: string;
-  mentions: number;
-  visibilityPct: number;
-  isYou: boolean;
+export interface LeaderboardEntry { brand: string; mentions: number; visibilityPct: number; isYou: boolean }
+export interface Slice { label: string; visibilityPct: number; prompts: number }
+export interface CitationEntry { domain: string; count: number }
+export interface Perception {
+  sentiment: 'positive' | 'neutral' | 'mixed' | 'negative' | 'not_discussed';
+  descriptors: string[];
+  summary: string;
 }
+export interface PersonaDef { name: string; description: string }
 
 export interface VisibilityResult {
-  /** 0-100: % of probed prompts whose answer mentioned the target brand. */
   visibilityPct: number;
   totalPrompts: number;
   brandsSeen: number;
   targetBrand: string;
   prompts: PromptResult[];
   leaderboard: LeaderboardEntry[];
+  models: Slice[];
+  personas: Slice[];
+  topics: Slice[];
+  personaDefs: PersonaDef[];
+  citations: CitationEntry[];
+  perception: Perception | null;
 }
 
 export interface VisibilityInput {
   domain: string;
   title: string;
-  /** AI-synthesis keyword opportunities, when available — best prompt source. */
   keywords?: string[];
-  /** Competitor domains the user supplied, to seed leaderboard matching. */
   competitorDomains?: string[];
 }
 
-/** Normalize a brand string for fuzzy matching ("Tote&Carry®" → "totecarry"). */
-function norm(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** Candidate identifiers for "this is us" matching. */
 function targetCandidates(domain: string, title: string): { display: string; keys: string[] } {
   const root = domain.replace(/^www\./, '').split('.')[0];
-  // First title segment, minus boilerplate suffixes ("Official Site", "Home").
   const seg = (title.split(/[|\-–—]/)[0] || '')
     .replace(/\b(official site|official store|home|homepage|shop|store)\b/gi, '')
     .trim();
@@ -69,7 +72,6 @@ function targetCandidates(domain: string, title: string): { display: string; key
   return { display: seg || root, keys: [...new Set(keys.filter(Boolean))] };
 }
 
-/** Derive the product category from the page title (segment before the brand suffix). */
 function deriveCategory(title: string, domain: string): string {
   const seg = (title.split(/[|–—]/)[0] || title).split(' - ')[0].trim();
   const cleaned = seg
@@ -80,45 +82,54 @@ function deriveCategory(title: string, domain: string): string {
   return cleaned || domain.split('.')[0];
 }
 
-export function generatePrompts(input: VisibilityInput, max = 8): string[] {
-  const prompts: string[] = [];
-  const kws = (input.keywords ?? []).filter(Boolean).slice(0, 4);
+const PROBE_SYSTEM =
+  'You are a helpful shopping/search assistant. Answer the user\'s question naturally with specific brand, product, and website recommendations, as you would for any consumer. After your answer, output exactly two final lines:\n' +
+  'BRANDS: ["Brand One", "Brand Two"] — a JSON array of every brand, company, or website you mentioned.\n' +
+  'SOURCES: ["example.com"] — a JSON array of website domains you would cite or point the user to (may be empty).';
 
-  // Keyword-driven prompts read most like real buyer questions.
-  for (const kw of kws) {
-    prompts.push(`What are the best ${kw}? Recommend specific brands.`);
-    prompts.push(`I'm shopping for ${kw} — which brands or sites should I consider?`);
+interface ProbeTarget { model: string; ask: (prompt: string) => Promise<string> }
+
+/** Build the list of models to probe: OpenAI always; Claude when key present. */
+async function buildProbeTargets(): Promise<ProbeTarget[]> {
+  const targets: ProbeTarget[] = [];
+
+  const oai = openaiClient();
+  if (oai) {
+    targets.push({
+      model: `OpenAI ${OPENAI_MODEL}`,
+      ask: async (prompt) => {
+        const r = await oai.chat.completions.create({
+          model: OPENAI_MODEL,
+          max_tokens: 700,
+          messages: [{ role: 'system', content: PROBE_SYSTEM }, { role: 'user', content: prompt }],
+        });
+        return r.choices[0]?.message?.content ?? '';
+      },
+    });
   }
 
-  // Category fallbacks from the title.
-  const cat = deriveCategory(input.title, input.domain);
-  const catPrompts = [
-    `What are the top brands for ${cat}?`,
-    `Best ${cat} to buy in 2026 — give me specific recommendations.`,
-    `Which websites are best for buying ${cat}?`,
-    `Recommend some highly rated ${cat} brands and where to buy them.`,
-  ];
-  for (const p of catPrompts) {
-    if (prompts.length >= max) break;
-    prompts.push(p);
+  if (process.env.ANTHROPIC_API_KEY) {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    targets.push({
+      model: 'Claude haiku-4-5',
+      ask: async (prompt) => {
+        const r = await claude.messages.create({
+          model: 'claude-haiku-4-5',
+          max_tokens: 700,
+          system: PROBE_SYSTEM,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        return r.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n');
+      },
+    });
   }
-  return [...new Set(prompts)].slice(0, max);
+
+  return targets;
 }
 
-/** Ask Claude one consumer prompt; return its brand list. */
-async function probePrompt(client: Anthropic, prompt: string): Promise<string[]> {
-  const msg = await client.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 700,
-    system:
-      'You are a helpful shopping/search assistant. Answer the user\'s question naturally with specific brand, product, and website recommendations, as you would for any consumer. After your answer, on the final line output exactly: BRANDS: ["Brand One", "Brand Two", ...] — a JSON array of every brand, company, or website you mentioned.',
-    messages: [{ role: 'user', content: prompt }],
-  });
-  const text = msg.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('\n');
-  const m = text.match(/BRANDS:\s*(\[[\s\S]*?\])/);
+function parseList(text: string, tag: 'BRANDS' | 'SOURCES'): string[] {
+  const m = text.match(new RegExp(`${tag}:\\s*(\\[[\\s\\S]*?\\])`));
   if (!m) return [];
   try {
     const arr = JSON.parse(m[1]);
@@ -128,35 +139,156 @@ async function probePrompt(client: Anthropic, prompt: string): Promise<string[]>
   }
 }
 
-export async function analyzeVisibility(input: VisibilityInput): Promise<VisibilityResult | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+/** Generate buyer personas for the category (Gumshoe-style persona testing). */
+async function generatePersonas(category: string): Promise<PersonaDef[]> {
+  const oai = openaiClient();
+  if (!oai) return [];
+  try {
+    const r = await oai.chat.completions.create({
+      model: OPENAI_MODEL,
+      max_tokens: 500,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'user',
+          content: `Category: "${category}". Invent 3 distinct, realistic buyer personas for this category (like "Weekend Track-Day Enthusiast" or "Budget-Conscious Commuter"). Return JSON: {"personas":[{"name":"...","description":"one sentence"}]}`,
+        },
+      ],
+    });
+    const parsed = JSON.parse(r.choices[0]?.message?.content ?? '{}');
+    return Array.isArray(parsed.personas)
+      ? parsed.personas
+          .filter((p: unknown): p is PersonaDef => !!p && typeof (p as PersonaDef).name === 'string')
+          .slice(0, 3)
+      : [];
+  } catch {
+    return [];
+  }
+}
 
-  const prompts = generatePrompts(input);
-  if (prompts.length === 0) return null;
+interface PlannedPrompt { prompt: string; persona: string; topic: string }
+
+function buildPromptPlan(category: string, keywords: string[], personas: PersonaDef[]): PlannedPrompt[] {
+  const plan: PlannedPrompt[] = [];
+
+  // Generic category prompts (baseline slice).
+  plan.push(
+    { prompt: `What are the top brands for ${category}?`, persona: 'General buyer', topic: 'Best in category' },
+    { prompt: `Which websites are best for buying ${category}?`, persona: 'General buyer', topic: 'Where to buy' },
+  );
+  for (const kw of keywords.slice(0, 2)) {
+    plan.push({ prompt: `What are the best ${kw}? Recommend specific brands.`, persona: 'General buyer', topic: 'Buying guide' });
+  }
+
+  // Persona-conditioned prompts (Gumshoe's differentiator).
+  for (const p of personas) {
+    plan.push(
+      {
+        prompt: `I'm a ${p.name.toLowerCase()} (${p.description}). What ${category} brands would you recommend for me?`,
+        persona: p.name,
+        topic: 'Best in category',
+      },
+      {
+        prompt: `As a ${p.name.toLowerCase()}, how should I choose between ${category} brands? Name the strongest options.`,
+        persona: p.name,
+        topic: 'Comparison',
+      },
+    );
+  }
+
+  // Dedup + cap. 8 prompts × N models keeps latency and cost sane.
+  const seen = new Set<string>();
+  return plan.filter((p) => !seen.has(p.prompt) && seen.add(p.prompt)).slice(0, 8);
+}
+
+/** Summarize how the models characterized the brand (sentiment + descriptors). */
+async function analyzePerception(brand: string, mentionedAnswers: string[]): Promise<Perception | null> {
+  const oai = openaiClient();
+  if (!oai) return null;
+  if (mentionedAnswers.length === 0) {
+    return { sentiment: 'not_discussed', descriptors: [], summary: `${brand} was not mentioned in any AI answer, so no brand perception exists yet.` };
+  }
+  try {
+    const r = await oai.chat.completions.create({
+      model: OPENAI_MODEL,
+      max_tokens: 300,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'user',
+          content: `These are AI assistant answers that mentioned the brand "${brand}":\n\n${mentionedAnswers.join('\n---\n').slice(0, 6000)}\n\nSummarize how the brand was characterized. Return JSON: {"sentiment":"positive|neutral|mixed|negative","descriptors":["adjective or phrase", ...max 6],"summary":"one sentence"}`,
+        },
+      ],
+    });
+    const parsed = JSON.parse(r.choices[0]?.message?.content ?? '{}');
+    if (!parsed.sentiment) return null;
+    return {
+      sentiment: parsed.sentiment,
+      descriptors: Array.isArray(parsed.descriptors) ? parsed.descriptors.slice(0, 6) : [],
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function slice(results: PromptResult[], key: (r: PromptResult) => string): Slice[] {
+  const map = new Map<string, { total: number; hit: number }>();
+  for (const r of results) {
+    const k = key(r);
+    const e = map.get(k) ?? { total: 0, hit: 0 };
+    e.total++;
+    if (r.mentioned) e.hit++;
+    map.set(k, e);
+  }
+  return [...map.entries()].map(([label, { total, hit }]) => ({
+    label,
+    visibilityPct: Math.round((hit / total) * 100),
+    prompts: total,
+  }));
+}
+
+export async function analyzeVisibility(input: VisibilityInput): Promise<VisibilityResult | null> {
+  const targets = await buildProbeTargets();
+  if (targets.length === 0) return null;
+
+  const category = deriveCategory(input.title, input.domain);
+  const personas = await generatePersonas(category);
+  const plan = buildPromptPlan(category, input.keywords ?? [], personas);
+  if (plan.length === 0) return null;
 
   const target = targetCandidates(input.domain, input.title);
 
   const settled = await Promise.allSettled(
-    prompts.map(async (prompt) => ({ prompt, brands: await probePrompt(client, prompt) })),
+    targets.flatMap((t) =>
+      plan.map(async (p): Promise<PromptResult & { raw: string }> => {
+        const raw = await t.ask(p.prompt);
+        return {
+          ...p,
+          model: t.model,
+          mentioned: false,
+          brands: parseList(raw, 'BRANDS'),
+          citations: parseList(raw, 'SOURCES'),
+          raw,
+        };
+      }),
+    ),
   );
 
-  const results: PromptResult[] = [];
+  const results: (PromptResult & { raw: string })[] = [];
   const counts = new Map<string, { display: string; count: number; isYou: boolean }>();
+  const citationCounts = new Map<string, number>();
 
   for (const s of settled) {
     if (s.status !== 'fulfilled') continue;
-    const { prompt, brands } = s.value;
-    let mentioned = false;
-    // Count each brand once per prompt (a brand repeated in one answer is
-    // still one "mention" in visibility terms).
+    const r = s.value;
     const seenThisPrompt = new Set<string>();
-    for (const b of brands) {
+    for (const b of r.brands) {
       const key = norm(b);
       if (!key || seenThisPrompt.has(key)) continue;
       seenThisPrompt.add(key);
       const isYou = target.keys.some((t) => key === t || key.includes(t) || t.includes(key));
-      if (isYou) mentioned = true;
+      if (isYou) r.mentioned = true;
       const existing = counts.get(key);
       if (existing) {
         existing.count++;
@@ -165,10 +297,21 @@ export async function analyzeVisibility(input: VisibilityInput): Promise<Visibil
         counts.set(key, { display: b, count: 1, isYou });
       }
     }
-    results.push({ prompt, mentioned, brands });
+    // Fallback: the raw answer may name the domain without listing it as a brand.
+    if (!r.mentioned && r.raw.toLowerCase().includes(input.domain.replace(/^www\./, '').toLowerCase())) {
+      r.mentioned = true;
+    }
+    for (const c of r.citations) {
+      const d = c.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+      if (d && d.includes('.')) citationCounts.set(d, (citationCounts.get(d) ?? 0) + 1);
+    }
+    results.push(r);
   }
 
   if (results.length === 0) return null;
+
+  const mentionedAnswers = results.filter((r) => r.mentioned).map((r) => r.raw);
+  const perception = await analyzePerception(target.display, mentionedAnswers);
 
   const mentionedCount = results.filter((r) => r.mentioned).length;
   const leaderboard: LeaderboardEntry[] = [...counts.values()]
@@ -180,19 +323,36 @@ export async function analyzeVisibility(input: VisibilityInput): Promise<Visibil
       visibilityPct: Math.round((e.count / results.length) * 100),
       isYou: e.isYou,
     }));
-
-  // Ensure the target brand appears on the board even at 0 mentions — the
-  // "you're invisible" row is the whole point of the audit.
   if (!leaderboard.some((l) => l.isYou)) {
-    leaderboard.push({ brand: target.display, mentions: mentionedCount, visibilityPct: Math.round((mentionedCount / results.length) * 100), isYou: true });
+    leaderboard.push({
+      brand: target.display,
+      mentions: mentionedCount,
+      visibilityPct: Math.round((mentionedCount / results.length) * 100),
+      isYou: true,
+    });
   }
+
+  // Strip raw answer text from the public payload (large + unnecessary).
+  const publicPrompts: PromptResult[] = results.map(({ raw: _raw, ...rest }) => {
+    void _raw;
+    return rest;
+  });
 
   return {
     visibilityPct: Math.round((mentionedCount / results.length) * 100),
     totalPrompts: results.length,
     brandsSeen: counts.size,
     targetBrand: target.display,
-    prompts: results,
+    prompts: publicPrompts,
     leaderboard,
+    models: slice(publicPrompts, (r) => r.model),
+    personas: slice(publicPrompts, (r) => r.persona),
+    topics: slice(publicPrompts, (r) => r.topic),
+    personaDefs: personas,
+    citations: [...citationCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([domain, count]) => ({ domain, count })),
+    perception,
   };
 }
