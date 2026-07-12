@@ -47,6 +47,7 @@ function DashboardContent() {
   // first poll response comes back.
   const [stage, setStage] = useState<string>('queued');
   const [priorScore, setPriorScore] = useState<number | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!targetUrl) return;
@@ -144,14 +145,14 @@ function DashboardContent() {
   if (loading) {
     return (
       <div className="flex min-h-screen bg-[var(--bg)]">
-        <Sidebar active="overview" domain={safeHostname(targetUrl)} />
+        <Sidebar active="overview" domain={safeHostname(targetUrl)} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 min-w-0">
-          <TopBar url={targetUrl} />
-          <main className="p-6 max-w-[1200px] mx-auto">
+          <TopBar url={targetUrl} onMenuClick={() => setSidebarOpen(true)} />
+          <main className="p-4 sm:p-6 max-w-[1200px] mx-auto">
             <div className="mb-4">
               <div className="text-sm text-[var(--ink-2)] flex items-center gap-2 mb-3">
-                <span className="w-2 h-2 rounded-full bg-[var(--brand)] animate-pulse" />
-                Running analysis engine — {safeHostname(targetUrl)}
+                <span className="w-2 h-2 rounded-full bg-[var(--brand)] animate-pulse shrink-0" />
+                <span className="truncate">Running analysis engine — {safeHostname(targetUrl)}</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {[
@@ -180,18 +181,18 @@ function DashboardContent() {
                 })}
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5 mt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-5 mt-4">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="card p-5">
+                <div key={i} className="card p-4 sm:p-5">
                   <div className="skeleton h-9 w-9 mb-4" />
                   <div className="skeleton h-7 w-24 mb-3" />
                   <div className="skeleton h-4 w-32" />
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-              <div className="card p-6"><div className="skeleton h-5 w-48 mb-5" />{[0,1,2,3].map(i=> <div key={i} className="skeleton h-4 w-full mb-3" />)}</div>
-              <div className="card p-6"><div className="skeleton h-5 w-48 mb-5" />{[0,1,2].map(i=> <div key={i} className="skeleton h-4 w-full mb-3" />)}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mt-4 sm:mt-5">
+              <div className="card p-4 sm:p-6"><div className="skeleton h-5 w-48 mb-5" />{[0,1,2,3].map(i=> <div key={i} className="skeleton h-4 w-full mb-3" />)}</div>
+              <div className="card p-4 sm:p-6"><div className="skeleton h-5 w-48 mb-5" />{[0,1,2].map(i=> <div key={i} className="skeleton h-4 w-full mb-3" />)}</div>
             </div>
           </main>
         </div>
@@ -201,11 +202,11 @@ function DashboardContent() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg)]">
-        <div className="card bg-[var(--red-soft)] text-[var(--red)] border-[var(--red)]/20 p-6 flex items-center gap-4 max-w-lg">
-          <XCircle size={32} />
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 bg-[var(--bg)]">
+        <div className="card bg-[var(--red-soft)] text-[var(--red)] border-[var(--red)]/20 p-5 sm:p-6 flex items-start sm:items-center gap-3 sm:gap-4 max-w-lg">
+          <XCircle size={28} className="shrink-0" />
           <div>
-            <h3 className="font-bold text-lg">Analysis Failed</h3>
+            <h3 className="font-bold text-base sm:text-lg">Analysis Failed</h3>
             <p className="text-sm opacity-80">{error || 'Unknown error occurred'}</p>
           </div>
         </div>
@@ -217,12 +218,12 @@ function DashboardContent() {
 
   return (
     <div className="flex min-h-screen bg-[var(--bg)]">
-      <Sidebar active="overview" domain={data.domain} />
+      <Sidebar active="overview" domain={data.domain} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 min-w-0">
-        <TopBar url={data.url} />
+        <TopBar url={data.url} onMenuClick={() => setSidebarOpen(true)} />
 
-        <main className="p-6 max-w-[1200px] mx-auto flex flex-col gap-5">
+        <main className="p-4 sm:p-6 max-w-[1200px] mx-auto flex flex-col gap-4 sm:gap-5">
           {/* Print-only report cover header. Hidden on screen (the TopBar covers
               that); shown when exporting to PDF, where the TopBar is stripped. */}
           <div className="print-header">
@@ -236,7 +237,7 @@ function DashboardContent() {
           </div>
 
           {/* KPI Row */}
-          <section id="overview" className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-5 scroll-mt-20">
+          <section id="overview" className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-5 scroll-mt-20">
             <StatCard hero label="Overall SEO Score" value={typeof data.overallScore === 'number' ? `${data.overallScore}/100` : 'N/A'} icon={Search}
               tone={data.overallScore == null ? 'amber' : data.overallScore > 80 ? 'brand' : data.overallScore > 50 ? 'amber' : 'red'} />
             <StatCard hero label="Brand Visibility" value={typeof data.visibilityPct === 'number' ? `${data.visibilityPct}%` : 'N/A'} icon={Sparkles}
@@ -265,8 +266,8 @@ function DashboardContent() {
 
           {/* Executive Summary from AI Synthesis */}
           {data.synthesis && (
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              <div className="card p-6 lg:col-span-2">
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+              <div className="card p-4 sm:p-6 lg:col-span-2">
                 <h2 className="text-base font-bold text-[var(--ink)] mb-3 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand)]" /> Executive Summary
                 </h2>
@@ -279,7 +280,7 @@ function DashboardContent() {
               </div>
 
               {data.synthesis.topCategoryScores && (
-                <div className="card p-6">
+                <div className="card p-4 sm:p-6">
                   <h3 className="text-base font-bold text-center text-[var(--ink)] mb-2">SEO Health by Category</h3>
                   <RadarChart scores={data.synthesis.topCategoryScores} domain={data.domain} />
                 </div>
@@ -291,7 +292,7 @@ function DashboardContent() {
           {data.synthesis && (
             <section id="content" className="flex flex-col gap-5 scroll-mt-20">
               {data.synthesis.contentGapBrief && (
-                <div className="card p-6">
+                <div className="card p-4 sm:p-6">
                   <span className="bg-[var(--blue-soft)] text-[var(--blue)] text-xs px-3 py-1 rounded-full uppercase font-bold tracking-wide">Suggested Post</span>
                   <h4 className="text-lg font-bold text-[var(--ink)] mt-3">{data.synthesis.contentGapBrief.title}</h4>
                   <p className="text-[var(--ink-3)] text-sm italic mt-1">{data.synthesis.contentGapBrief.rationale}</p>
@@ -322,10 +323,10 @@ function DashboardContent() {
           {competitors.length === 0 && <span id="competitors" className="scroll-mt-20" />}
 
           {/* Technical + CRO Grid */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
 
           {/* Technical Health */}
-          <div id="technical" className="card p-6 scroll-mt-20">
+          <div id="technical" className="card p-4 sm:p-6 scroll-mt-20">
             <h3 className="text-base font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
               <Zap size={18} className="text-[var(--blue)]" /> Technical &amp; Performance
             </h3>
@@ -356,7 +357,7 @@ function DashboardContent() {
           </div>
 
           {/* CRO Signals */}
-          <div className="card p-6">
+          <div className="card p-4 sm:p-6">
             <h3 className="text-base font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
               <Target size={18} className="text-[var(--brand)]" /> CRO / UX Signals
             </h3>
@@ -378,7 +379,7 @@ function DashboardContent() {
 
           {/* Core Web Vitals (#5) */}
           {data.technical.cwv && (data.technical.cwv.lcp || data.technical.cwv.cls) && (
-            <div className="card p-6">
+            <div className="card p-4 sm:p-6">
               <h3 className="text-base font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
                 <Gauge size={18} className="text-[var(--blue)]" /> Core Web Vitals <span className="text-xs font-normal text-[var(--ink-3)]">(Mobile)</span>
               </h3>
@@ -401,7 +402,7 @@ function DashboardContent() {
 
           {/* Structured Data / Schema (#8) */}
           {data.schema && (
-            <div className="card p-6">
+            <div className="card p-4 sm:p-6">
               <h3 className="text-base font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
                 <FileText size={18} className="text-[var(--brand)]" /> Structured Data (Schema.org)
               </h3>
@@ -429,7 +430,7 @@ function DashboardContent() {
 
           {/* Site-level Crawl (#3) */}
           {data.siteCrawl && data.siteCrawl.pagesAnalyzed > 0 && (
-            <div className="md:col-span-2 card p-6">
+            <div className="md:col-span-2 card p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
                   <Link2 size={18} className="text-[var(--blue)]" /> Site-Level Crawl
@@ -488,7 +489,7 @@ function DashboardContent() {
 
           {/* Live SERP Intelligence (#4) */}
           {data.serp && data.serp.organic?.length > 0 && (
-            <div className="md:col-span-2 card p-6">
+            <div className="md:col-span-2 card p-4 sm:p-6">
               <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                 <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
                   <Search size={18} className="text-[var(--brand)]" /> Live SERP — who ranks for &ldquo;{data.serp.query}&rdquo;
@@ -537,7 +538,7 @@ function DashboardContent() {
 
           {/* Keyword Opportunities */}
           {data.synthesis?.keywordOpportunities && (
-            <div id="keywords" className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 scroll-mt-20">
+            <div id="keywords" className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mt-4 scroll-mt-20">
               <div className="md:col-span-1">
                  <KeywordIntentChart keywords={data.synthesis.keywordOpportunities} />
               </div>
@@ -555,7 +556,7 @@ function DashboardContent() {
           )}
 
           {/* On-Page Snapshot */}
-          <div className="md:col-span-2 card p-6">
+          <div className="md:col-span-2 card p-4 sm:p-6">
             <h3 className="text-base font-bold text-[var(--ink)] mb-5">Current Title Tag Snapshot</h3>
 
             <div className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg p-5 mb-4">

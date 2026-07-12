@@ -60,11 +60,11 @@ export default function ActionPlanBoard({ data }: { data: AuditData }) {
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden mt-6 mb-12">
 
       {/* 1. On-Page Issues Table View */}
-      <div className="px-6 border-b border-[var(--border)]">
+      <div className="px-4 sm:px-6 border-b border-[var(--border)]">
          <OnPageIssuesTable issues={issuesList} />
       </div>
 
-      <div className="p-6 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface-2)]">
+      <div className="p-4 sm:p-6 border-b border-[var(--border)] flex flex-wrap gap-2 justify-between items-center bg-[var(--surface-2)]">
         <div>
            <h3 className="text-xl font-bold text-[var(--brand-ink)] flex items-center gap-2">
              <AlertOctagon size={20} /> Prioritized Action Plan
@@ -79,7 +79,7 @@ export default function ActionPlanBoard({ data }: { data: AuditData }) {
         ) : (
            <ul className="divide-y divide-[var(--border)]">
              {actions.sort((a, b) => PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority]).map((action, idx) => (
-               <li key={idx} className="p-5 flex items-start gap-4 hover:bg-[var(--surface-2)] transition-colors group">
+               <li key={idx} className="p-4 sm:p-5 flex items-start gap-3 sm:gap-4 hover:bg-[var(--surface-2)] transition-colors group">
                  <div className="mt-1">
                    {action.priority === 'Critical' && <AlertCircle className="text-[var(--fail)]" size={20}/>}
                    {action.priority === 'High' && <AlertTriangle className="text-[var(--warn)]" size={20}/>}

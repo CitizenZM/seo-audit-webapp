@@ -82,7 +82,7 @@ export default function ReportPage() {
   if (status === 'error') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg)] p-6">
-        <div className="card p-8 max-w-md text-center">
+        <div className="card p-6 sm:p-8 max-w-md w-full text-center">
           <XCircle size={28} className="text-[var(--fail)] mx-auto mb-3" />
           <h2 className="text-lg font-bold text-[var(--ink)] mb-1">Report unavailable</h2>
           <p className="text-sm text-[var(--ink-3)]">{error}</p>
@@ -94,7 +94,7 @@ export default function ReportPage() {
   if (status === 'pending') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg)] p-6">
-        <div className="card p-8 max-w-md text-center">
+        <div className="card p-6 sm:p-8 max-w-md w-full text-center">
           <Loader2 size={24} className="animate-spin text-[var(--brand)] mx-auto mb-3" />
           <h2 className="text-lg font-bold text-[var(--ink)] mb-1">This audit is still running</h2>
           <p className="text-sm text-[var(--ink-3)]">Check back once it finishes, or watch it live from the dashboard.</p>
@@ -109,7 +109,7 @@ export default function ReportPage() {
     <div className="min-h-screen bg-[var(--bg)]">
       <ReportHeader domain={meta?.domain ?? data.domain} url={meta?.url ?? data.url} generatedAt={meta?.createdAt ?? new Date().toISOString()} />
 
-      <main className="max-w-[1000px] mx-auto p-6 flex flex-col gap-5">
+      <main className="max-w-[1000px] mx-auto p-4 sm:p-6 flex flex-col gap-4 sm:gap-5">
         {/* Print-only cover header */}
         <div className="print-header">
           <div className="print-brand">SEO &amp; GEO Audit Report</div>
@@ -120,7 +120,7 @@ export default function ReportPage() {
         </div>
 
         {/* KPI row */}
-        <section className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-5">
+        <section className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-5">
           <StatCard hero label="Overall SEO Score" value={typeof data.overallScore === 'number' ? `${data.overallScore}/100` : 'N/A'} icon={Search}
             tone={data.overallScore == null ? 'amber' : data.overallScore > 80 ? 'brand' : data.overallScore > 50 ? 'amber' : 'red'} />
           <StatCard hero label="Brand Visibility" value={typeof data.visibilityPct === 'number' ? `${data.visibilityPct}%` : 'N/A'} icon={Sparkles}
@@ -139,8 +139,8 @@ export default function ReportPage() {
 
         {/* Executive summary + health radar */}
         {data.synthesis && (
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <div className="card p-6 lg:col-span-2">
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+            <div className="card p-4 sm:p-6 lg:col-span-2">
               <h2 className="text-base font-bold text-[var(--ink)] mb-3">Executive Summary</h2>
               <p className="text-[var(--ink-2)] text-[0.95rem] leading-relaxed">{data.synthesis.executiveSummary}</p>
               <div className="mt-5 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/15 p-4">
@@ -149,7 +149,7 @@ export default function ReportPage() {
               </div>
             </div>
             {data.synthesis.topCategoryScores && (
-              <div className="card p-6">
+              <div className="card p-4 sm:p-6">
                 <h3 className="text-base font-bold text-center text-[var(--ink)] mb-2">SEO Health by Category</h3>
                 <RadarChart scores={data.synthesis.topCategoryScores} domain={data.domain} />
               </div>
@@ -162,7 +162,7 @@ export default function ReportPage() {
         {data.geo && <GeoCard geo={data.geo} />}
 
         {data.synthesis?.keywordOpportunities && (
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             <div className="md:col-span-1"><KeywordIntentChart keywords={data.synthesis.keywordOpportunities} /></div>
             <div className="md:col-span-2"><KeywordTable keywords={data.synthesis.keywordOpportunities} /></div>
           </section>

@@ -18,7 +18,7 @@ export default function OptimizationPlanCard({ plan }: { plan: OptimizationPlan 
   const delta = plan.projectedOverallScore - plan.currentOverallScore;
 
   return (
-    <div id="optimization-plan" className="card p-6 scroll-mt-20">
+    <div id="optimization-plan" className="card p-4 sm:p-6 scroll-mt-20">
       <div className="flex items-start justify-between flex-wrap gap-4 mb-5">
         <div>
           <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
@@ -26,7 +26,7 @@ export default function OptimizationPlanCard({ plan }: { plan: OptimizationPlan 
           </h3>
           <p className="text-sm text-[var(--ink-3)] mt-0.5 max-w-2xl">{plan.summary}</p>
         </div>
-        <div className="flex items-center gap-3 shrink-0 bg-[var(--surface-2)] rounded-xl px-4 py-3 border border-[var(--border)]">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 bg-[var(--surface-2)] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 border border-[var(--border)] w-full sm:w-auto justify-center">
           <div className="text-center">
             <div className="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-semibold">Current</div>
             <div className="text-2xl font-extrabold text-[var(--ink)]">{plan.currentOverallScore}</div>

@@ -40,7 +40,7 @@ function GenerateDraft({ brief }: { brief: Record<string, unknown> }) {
         <button
           onClick={generate}
           disabled={status === 'loading'}
-          className="no-print flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[var(--brand)] text-white text-sm font-semibold hover:brightness-95 transition-all disabled:opacity-60"
+          className="no-print flex items-center gap-2 h-11 px-3.5 rounded-lg bg-[var(--brand)] text-white text-sm font-semibold hover:brightness-95 transition-all disabled:opacity-60"
         >
           {status === 'loading' ? <Loader2 size={15} className="animate-spin" /> : <PenLine size={15} />}
           {status === 'loading' ? 'Writing draft…' : 'Generate draft'}
@@ -70,12 +70,12 @@ export default function ContentBriefs({ briefs }: { briefs: Array<Record<string,
 
   return (
     <div id="content-generation" className="mt-8 scroll-mt-20">
-      <h3 className="text-xl font-bold text-[var(--ink)] mb-2">Content Briefs — Top Keyword Opportunities</h3>
+      <h3 className="text-lg sm:text-xl font-bold text-[var(--ink)] mb-2">Content Briefs — Top Keyword Opportunities</h3>
       <p className="text-sm text-[var(--muted)] mb-6">Ready-to-brief content specs — or generate a publish-ready draft in one click.</p>
 
       <div className="space-y-6">
         {briefs.map((brief, idx) => (
-          <div key={idx} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 relative overflow-hidden">
+          <div key={idx} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6 relative overflow-hidden">
             
             {/* Header */}
             <div className="flex justify-between items-start flex-wrap gap-2 mb-4">

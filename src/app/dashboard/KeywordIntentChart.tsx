@@ -49,7 +49,7 @@ export default function KeywordIntentChart({ keywords }: { keywords: Keyword[] }
   };
 
   return (
-    <div className="card p-6 h-full flex flex-col justify-center items-center">
+    <div className="card p-4 sm:p-6 h-full flex flex-col justify-center items-center">
       <h3 className="text-base font-bold text-[var(--ink)] mb-6 w-full text-left">Keyword Intent Mix</h3>
       <div className="w-full max-w-[280px]">
         <Doughnut data={data} options={options} />

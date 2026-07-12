@@ -36,7 +36,7 @@ export default function EmailReport({ url, domain, score, previousScore }: Email
   }
 
   return (
-    <div className="no-print card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="no-print card p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
           <Mail size={18} className="text-[var(--brand)]" /> Email this report
@@ -56,12 +56,12 @@ export default function EmailReport({ url, domain, score, previousScore }: Email
             placeholder="you@company.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="flex-1 sm:w-56 px-3 h-10 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder-[var(--ink-3)] focus:outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-soft)]"
+            className="flex-1 sm:w-56 px-3 h-11 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--ink)] placeholder-[var(--ink-3)] focus:outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-soft)]"
           />
           <button
             type="submit"
             disabled={status === 'sending'}
-            className="h-10 px-4 rounded-lg bg-[var(--brand)] text-white text-sm font-semibold hover:brightness-95 transition-all disabled:opacity-50 flex items-center gap-2"
+            className="h-11 px-4 rounded-lg bg-[var(--brand)] text-white text-sm font-semibold hover:brightness-95 transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {status === 'sending' ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
             Send

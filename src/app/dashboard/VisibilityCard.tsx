@@ -18,7 +18,7 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
 
   if (!visibility) {
     return (
-      <div id="visibility" className="card p-6 scroll-mt-20">
+      <div id="visibility" className="card p-4 sm:p-6 scroll-mt-20">
         <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-2">
           <Eye size={18} className="text-[var(--brand)]" /> Brand Visibility in AI Answers
         </h3>
@@ -54,7 +54,7 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
       <div className="flex flex-col gap-1.5">
         {slices.map((s) => (
           <div key={s.label} className="flex items-center gap-2">
-            <span className="text-sm text-[var(--ink-2)] w-40 truncate shrink-0" title={s.label}>{s.label}</span>
+            <span className="text-sm text-[var(--ink-2)] w-24 sm:w-40 truncate shrink-0" title={s.label}>{s.label}</span>
             <div className="flex-1 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
               <div className="h-full rounded-full" style={{ width: `${Math.max(2, s.visibilityPct)}%`, background: s.visibilityPct >= 40 ? 'var(--brand)' : s.visibilityPct >= 10 ? 'var(--amber)' : 'var(--red)' }} />
             </div>
@@ -66,7 +66,7 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
   );
 
   return (
-    <div id="visibility" className="card p-6 scroll-mt-20">
+    <div id="visibility" className="card p-4 sm:p-6 scroll-mt-20">
       <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
         <div>
           <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
@@ -92,14 +92,14 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
         {/* Donut + perception */}
         <div>
-          <div className="flex items-center gap-6">
-            <div className="relative w-36 h-36 shrink-0">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <div className="relative w-28 h-28 sm:w-36 sm:h-36 shrink-0">
               <Doughnut data={donut} options={{ cutout: '74%', plugins: { legend: { display: false }, tooltip: { enabled: false } } }} />
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-extrabold" style={{ color: tone }}>{pct}%</span>
+                <span className="text-2xl sm:text-3xl font-extrabold" style={{ color: tone }}>{pct}%</span>
               </div>
             </div>
             <div className="text-sm text-[var(--ink-2)]">
@@ -136,13 +136,13 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
         <div id="leaderboard" className="scroll-mt-20">
           <div className="text-xs uppercase tracking-wider font-semibold text-[var(--ink-3)] mb-2">Competitive Leaderboard</div>
           <div className="flex flex-col">
-            <div className="grid grid-cols-[2rem_1fr_5rem_5rem] gap-2 px-2 py-1.5 text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-semibold">
+            <div className="grid grid-cols-[1.5rem_1fr_4rem_4rem] sm:grid-cols-[2rem_1fr_5rem_5rem] gap-1.5 sm:gap-2 px-2 py-1.5 text-[10px] sm:text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-semibold">
               <span>Rank</span><span>Brand</span><span className="text-right">Mentions</span><span className="text-right">Visibility</span>
             </div>
             {visibility.leaderboard.slice(0, 6).map((e, i) => (
               <div
                 key={e.brand + i}
-                className={`grid grid-cols-[2rem_1fr_5rem_5rem] gap-2 px-2 py-2 rounded-lg text-sm items-center transition-colors ${e.isYou ? 'bg-[var(--brand-soft)] border border-[var(--brand)]/20' : 'border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]'}`}
+                className={`grid grid-cols-[1.5rem_1fr_4rem_4rem] sm:grid-cols-[2rem_1fr_5rem_5rem] gap-1.5 sm:gap-2 px-2 py-2 rounded-lg text-sm items-center transition-colors ${e.isYou ? 'bg-[var(--brand-soft)] border border-[var(--brand)]/20' : 'border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]'}`}
               >
                 <span className="font-bold text-[var(--ink-3)]">{i + 1}</span>
                 <span className={`truncate font-medium ${e.isYou ? 'text-[var(--brand-ink)]' : 'text-[var(--ink)]'}`}>

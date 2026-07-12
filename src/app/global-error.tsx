@@ -13,7 +13,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
           <p style={{ fontSize: 14, color: '#5b6170', marginBottom: 24 }}>An unexpected error occurred. Please try again.</p>
           <button
             onClick={() => reset()}
-            style={{ height: 40, padding: '0 16px', borderRadius: 8, background: '#16a34a', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}
+            style={{ height: 44, padding: '0 20px', borderRadius: 8, background: '#16a34a', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
           >
             Try again
           </button>

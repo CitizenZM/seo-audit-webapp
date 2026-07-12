@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, RefreshCw, Share2, Download, Bell, Check } from 'lucide-react';
+import { Search, RefreshCw, Share2, Download, Bell, Check, Menu } from 'lucide-react';
 import AccountMenu from '@/app/AccountMenu';
 
 const NAV_LINKS: { label: string; href: string }[] = [
@@ -11,15 +11,24 @@ const NAV_LINKS: { label: string; href: string }[] = [
   { label: 'Help', href: '#' },
 ];
 
-export default function TopBar({ url }: { url?: string }) {
+export default function TopBar({ url, onMenuClick }: { url?: string; onMenuClick?: () => void }) {
   const [shared, setShared] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
 
   return (
-    <header className="h-[68px] sticky top-0 z-40 bg-[var(--surface)]/85 backdrop-blur-md border-b border-[var(--border)] flex items-center justify-between px-6 gap-4">
-      <div className="min-w-0">
-        <h1 className="text-[18px] font-bold text-[var(--ink)] tracking-tight leading-tight">SEO Report</h1>
-        <p className="text-xs text-[var(--ink-3)] truncate max-w-[280px]">{url}</p>
+    <header className="h-16 sm:h-[68px] sticky top-0 z-40 bg-[var(--surface)]/85 backdrop-blur-md border-b border-[var(--border)] flex items-center justify-between px-3 sm:px-6 gap-2 sm:gap-4">
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          onClick={onMenuClick}
+          aria-label="Open menu"
+          className="no-print lg:hidden w-11 h-11 -ml-1 shrink-0 flex items-center justify-center rounded-lg text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors"
+        >
+          <Menu size={20} />
+        </button>
+        <div className="min-w-0">
+          <h1 className="text-[15px] sm:text-[18px] font-bold text-[var(--ink)] tracking-tight leading-tight">SEO Report</h1>
+          <p className="text-[11px] sm:text-xs text-[var(--ink-3)] truncate max-w-[160px] sm:max-w-[280px]">{url}</p>
+        </div>
       </div>
 
       {/* Horizontal utility nav — Salesforce-one style */}
@@ -29,7 +38,7 @@ export default function TopBar({ url }: { url?: string }) {
         ))}
       </nav>
 
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-1.5 sm:gap-2.5">
         <div className="hidden md:flex items-center gap-2 px-3 h-9 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--ink-3)] w-[200px]">
           <Search size={15} />
           <input
@@ -46,12 +55,12 @@ export default function TopBar({ url }: { url?: string }) {
         <div className="no-print relative">
           <button
             onClick={() => setShowNotifs((s) => !s)}
-            className="relative w-9 h-9 flex items-center justify-center rounded-lg border border-[var(--border)] text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors bell-dot"
+            className="relative w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg border border-[var(--border)] text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors bell-dot"
           >
             <Bell size={16} />
           </button>
           {showNotifs && (
-            <div className="absolute right-0 top-11 w-72 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-md)] p-3 z-50">
+            <div className="absolute right-0 top-11 w-[calc(100vw-1.5rem)] max-w-72 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-md)] p-3 z-50">
               <div className="text-xs font-bold uppercase tracking-wider text-[var(--ink-3)] mb-2 px-1">Notifications</div>
               <div className="flex flex-col gap-1">
                 <div className="px-2 py-2 rounded-lg hover:bg-[var(--surface-2)] text-sm text-[var(--ink-2)]">Report generated successfully.</div>
@@ -63,9 +72,16 @@ export default function TopBar({ url }: { url?: string }) {
 
         <button
           onClick={() => window.print()}
-          className="no-print flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors"
+          className="no-print hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors"
         >
           <Download size={15} /> Export PDF
+        </button>
+        <button
+          onClick={() => window.print()}
+          aria-label="Export PDF"
+          className="no-print sm:hidden flex items-center justify-center w-10 h-10 rounded-lg border border-[var(--border)] text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors"
+        >
+          <Download size={16} />
         </button>
         <button
           onClick={() => {
@@ -74,10 +90,10 @@ export default function TopBar({ url }: { url?: string }) {
             setShared(true);
             setTimeout(() => setShared(false), 2000);
           }}
-          className="no-print flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-white text-sm font-semibold hover:brightness-105 transition-all shadow-[0_2px_8px_rgba(22,163,74,0.25)]"
+          className="no-print flex items-center gap-1.5 h-9 sm:h-9 px-2.5 sm:px-3.5 rounded-lg text-white text-sm font-semibold hover:brightness-105 transition-all shadow-[0_2px_8px_rgba(22,163,74,0.25)]"
           style={{ background: 'var(--grad-brand)' }}
         >
-          {shared ? <Check size={15} /> : <Share2 size={15} />} {shared ? 'Copied' : 'Share'}
+          {shared ? <Check size={15} /> : <Share2 size={15} />} <span className="hidden sm:inline">{shared ? 'Copied' : 'Share'}</span>
         </button>
         <AccountMenu />
       </div>

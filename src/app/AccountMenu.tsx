@@ -43,7 +43,7 @@ export default function AccountMenu() {
 
   if (!email) {
     return (
-      <Link href="/login" className="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors">
+      <Link href="/login" className="flex items-center gap-1.5 h-10 px-3 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors">
         <LogIn size={15} /> Sign in
       </Link>
     );
@@ -55,7 +55,7 @@ export default function AccountMenu() {
       <button
         onClick={signOut}
         disabled={signingOut}
-        className="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-50"
+        className="flex items-center gap-1.5 h-10 px-3 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-50"
       >
         {signingOut ? <Loader2 size={15} className="animate-spin" /> : <LogOut size={15} />}
         Sign out

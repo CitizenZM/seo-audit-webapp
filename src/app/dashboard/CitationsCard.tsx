@@ -15,7 +15,7 @@ export default function CitationsCard({ citations, domain }: { citations: Citati
   const you = domain.replace(/^www\./, '');
 
   return (
-    <div id="citations" className="card p-6 scroll-mt-20">
+    <div id="citations" className="card p-4 sm:p-6 scroll-mt-20">
       <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
         <Quote size={18} className="text-[var(--blue)]" /> Citation Audit
       </h3>
@@ -29,7 +29,7 @@ export default function CitationsCard({ citations, domain }: { citations: Citati
           return (
             <div key={c.domain} className={`flex items-center gap-3 px-2 py-1.5 rounded-lg ${isYou ? 'bg-[var(--brand-soft)]' : ''}`}>
               <span className="text-xs font-bold text-[var(--ink-3)] w-5">{i + 1}</span>
-              <span className={`text-sm w-56 truncate ${isYou ? 'font-semibold text-[var(--brand-ink)]' : 'text-[var(--ink)]'}`}>
+              <span className={`text-sm w-28 sm:w-56 truncate ${isYou ? 'font-semibold text-[var(--brand-ink)]' : 'text-[var(--ink)]'}`}>
                 {c.domain}{isYou ? ' · You' : ''}
               </span>
               <div className="flex-1 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">

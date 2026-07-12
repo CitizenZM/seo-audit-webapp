@@ -5,7 +5,7 @@ export default function ContentCalendar({ calendar }: { calendar: Array<Record<s
 
   return (
     <div className="mt-8">
-      <h3 className="text-xl font-bold text-[var(--ink)] mb-2">Content Calendar — 12 Week Roadmap</h3>
+      <h3 className="text-lg sm:text-xl font-bold text-[var(--ink)] mb-2">Content Calendar — 12 Week Roadmap</h3>
       <p className="text-sm text-[var(--muted)] mb-6">12-week content roadmap based on gap analysis. Prioritizes quick wins first, builds toward strategic content.</p>
 
       {/* Legend */}

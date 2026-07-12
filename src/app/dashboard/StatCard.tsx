@@ -27,24 +27,25 @@ export default function StatCard({ label, value, icon: Icon, delta, deltaSuffix 
 
   if (hero) {
     return (
-      <div className="tile-gradient p-5" style={{ background: t.grad }}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-white/15 text-white">
-              <Icon size={18} />
+      <div className="tile-gradient p-3.5 sm:p-5" style={{ background: t.grad }}>
+        <div className="flex items-center justify-between mb-2.5 sm:mb-4">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 shrink-0 rounded-lg flex items-center justify-center bg-white/15 text-white">
+              <Icon size={16} className="sm:hidden" />
+              <Icon size={18} className="hidden sm:block" />
             </div>
-            <span className="text-sm font-medium text-white/85">{label}</span>
+            <span className="text-xs sm:text-sm font-medium text-white/85 truncate">{label}</span>
           </div>
-          <MoreHorizontal size={18} className="text-white/60" />
+          <MoreHorizontal size={18} className="hidden sm:block text-white/60 shrink-0" />
         </div>
-        <div className="text-[30px] font-extrabold text-white leading-none tracking-tight mb-3">{value}</div>
+        <div className="text-xl sm:text-[30px] font-extrabold text-white leading-none tracking-tight mb-1.5 sm:mb-3">{value}</div>
         {delta !== undefined && (
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-md bg-white/15 text-white">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold px-1.5 py-0.5 rounded-md bg-white/15 text-white">
               {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
               {up ? '+' : ''}{delta}%
             </span>
-            <span className="text-xs text-white/70">{deltaSuffix}</span>
+            <span className="hidden sm:inline text-xs text-white/70">{deltaSuffix}</span>
           </div>
         )}
       </div>
@@ -52,23 +53,24 @@ export default function StatCard({ label, value, icon: Icon, delta, deltaSuffix 
   }
 
   return (
-    <div className="card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: t.soft, color: t.ink }}>
-            <Icon size={18} />
+    <div className="card p-3.5 sm:p-5">
+      <div className="flex items-center justify-between mb-2.5 sm:mb-4">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+          <div className="w-7 h-7 sm:w-9 sm:h-9 shrink-0 rounded-lg flex items-center justify-center" style={{ background: t.soft, color: t.ink }}>
+            <Icon size={16} className="sm:hidden" />
+            <Icon size={18} className="hidden sm:block" />
           </div>
-          <span className="text-sm font-medium text-[var(--ink-2)]">{label}</span>
+          <span className="text-xs sm:text-sm font-medium text-[var(--ink-2)] truncate">{label}</span>
         </div>
-        <MoreHorizontal size={18} className="text-[var(--ink-3)]" />
+        <MoreHorizontal size={18} className="hidden sm:block text-[var(--ink-3)] shrink-0" />
       </div>
 
-      <div className="text-[28px] font-extrabold text-[var(--ink)] leading-none tracking-tight mb-3">{value}</div>
+      <div className="text-xl sm:text-[28px] font-extrabold text-[var(--ink)] leading-none tracking-tight mb-1.5 sm:mb-3">{value}</div>
 
       {delta !== undefined && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <span
-            className="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-md"
+            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold px-1.5 py-0.5 rounded-md"
             style={{
               background: up ? 'var(--brand-soft)' : 'var(--red-soft)',
               color: up ? 'var(--brand)' : 'var(--red)',
@@ -77,7 +79,7 @@ export default function StatCard({ label, value, icon: Icon, delta, deltaSuffix 
             {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
             {up ? '+' : ''}{delta}%
           </span>
-          <span className="text-xs text-[var(--ink-3)]">{deltaSuffix}</span>
+          <span className="hidden sm:inline text-xs text-[var(--ink-3)]">{deltaSuffix}</span>
         </div>
       )}
     </div>

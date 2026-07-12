@@ -37,8 +37,8 @@ export default function GeoCard({ geo }: { geo: Geo }) {
   ];
 
   return (
-    <div id="geo" className="card p-6 scroll-mt-20">
-      <div className="flex items-start justify-between flex-wrap gap-4 mb-5">
+    <div id="geo" className="card p-4 sm:p-6 scroll-mt-20">
+      <div className="flex items-start justify-between flex-wrap gap-3 sm:gap-4 mb-4 sm:mb-5">
         <div>
           <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
             <Sparkles size={18} className="text-[var(--brand)]" /> Generative Engine Optimization (GEO)
@@ -49,7 +49,7 @@ export default function GeoCard({ geo }: { geo: Geo }) {
         </div>
         <div className="flex items-center gap-3">
           <div
-            className="relative w-14 h-14 rounded-full shrink-0"
+            className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full shrink-0"
             style={{ background: `conic-gradient(${tone.color} ${geo.score * 3.6}deg, var(--surface-2) 0deg)` }}
           >
             <div className="absolute inset-[3px] rounded-full bg-[var(--surface)] flex items-center justify-center text-xs font-bold" style={{ color: tone.color }}>
@@ -58,7 +58,7 @@ export default function GeoCard({ geo }: { geo: Geo }) {
           </div>
           <div className="text-right">
             <div className="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-semibold">AI Visibility</div>
-            <div className="text-3xl font-extrabold leading-none" style={{ color: tone.color }}>{geo.score}<span className="text-lg text-[var(--ink-3)]">/100</span></div>
+            <div className="text-2xl sm:text-3xl font-extrabold leading-none" style={{ color: tone.color }}>{geo.score}<span className="text-base sm:text-lg text-[var(--ink-3)]">/100</span></div>
           </div>
         </div>
       </div>

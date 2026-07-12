@@ -29,7 +29,7 @@ export default function TrendsCard({ url }: { url: string }) {
 
   if (history.length < 2) {
     return (
-      <div id="trends" className="card p-6 scroll-mt-20">
+      <div id="trends" className="card p-4 sm:p-6 scroll-mt-20">
         <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
           <TrendingUp size={18} className="text-[var(--brand)]" /> Trends
         </h3>
@@ -49,7 +49,7 @@ export default function TrendsCard({ url }: { url: string }) {
   ];
 
   return (
-    <div id="trends" className="card p-6 scroll-mt-20">
+    <div id="trends" className="card p-4 sm:p-6 scroll-mt-20">
       <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-4">
         <TrendingUp size={18} className="text-[var(--brand)]" /> Trends
       </h3>

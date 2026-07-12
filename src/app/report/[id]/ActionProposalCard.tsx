@@ -44,7 +44,7 @@ export default function ActionProposalCard({ auditId, initialProposal }: { audit
 
   if (!proposal) {
     return (
-      <div id="action-proposal" className="card p-6 scroll-mt-20">
+      <div id="action-proposal" className="card p-4 sm:p-6 scroll-mt-20">
         <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
           <ClipboardList size={18} className="text-[var(--brand)]" /> Systematic Action Plan Proposal
         </h3>
@@ -53,7 +53,7 @@ export default function ActionProposalCard({ auditId, initialProposal }: { audit
         </p>
         <button
           type="button"
-          className="no-print mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-lg text-white font-semibold text-sm disabled:opacity-70"
+          className="no-print mt-4 inline-flex items-center gap-2 h-11 px-4 rounded-lg text-white font-semibold text-sm disabled:opacity-70"
           style={{ background: 'var(--grad-brand)' }}
           onClick={handleGenerate}
           disabled={status === 'loading'}
@@ -67,7 +67,7 @@ export default function ActionProposalCard({ auditId, initialProposal }: { audit
   }
 
   return (
-    <div id="action-proposal" className="card p-6 scroll-mt-20">
+    <div id="action-proposal" className="card p-4 sm:p-6 scroll-mt-20">
       {/* Header */}
       <div>
         <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">

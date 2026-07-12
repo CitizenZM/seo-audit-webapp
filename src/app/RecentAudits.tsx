@@ -30,7 +30,7 @@ export default function RecentAudits() {
           <button
             key={a.url + a.timestamp}
             onClick={() => router.push(`/dashboard?url=${encodeURIComponent(a.url)}`)}
-            className="card px-4 py-3 flex items-center justify-between text-left hover:border-[var(--brand)] transition-colors group"
+            className="card px-4 py-3 min-h-[52px] flex items-center justify-between gap-3 text-left hover:border-[var(--brand)] transition-colors group"
           >
             <div className="min-w-0">
               <div className="text-sm font-semibold text-[var(--ink)] truncate">{a.domain}</div>

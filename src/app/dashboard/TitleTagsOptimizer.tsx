@@ -5,12 +5,12 @@ export default function TitleTagsOptimizer({ titleTags }: { titleTags: Array<Rec
 
   return (
     <div className="mt-8">
-      <h3 className="text-xl font-bold text-[var(--ink)] mb-2">Optimized Title Tags & Meta Descriptions</h3>
+      <h3 className="text-lg sm:text-xl font-bold text-[var(--ink)] mb-2">Optimized Title Tags &amp; Meta Descriptions</h3>
       <p className="text-sm text-[var(--muted)] mb-6">Rewrite-ready title tags and meta descriptions for all key pages. Character counts included.</p>
 
       <div className="grid gap-4">
         {titleTags.map((tag, i) => (
-          <div key={i} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <div key={i} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-5">
              <div className="text-xs font-bold uppercase tracking-wider text-[var(--brand-ink)] mb-2">{String(tag.page)}</div>
              <div className="text-sm text-[var(--muted)] mb-1">Current: {String(tag.current)}</div>
              

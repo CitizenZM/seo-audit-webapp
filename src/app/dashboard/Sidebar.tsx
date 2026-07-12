@@ -2,7 +2,7 @@
 
 import {
   LayoutDashboard, Zap, Search, Users, FileText, BarChart3, Settings, HelpCircle,
-  Sparkles, Eye, Trophy, Quote, PenLine, UserRound, TrendingUp, Rocket,
+  Sparkles, Eye, Trophy, Quote, PenLine, UserRound, TrendingUp, Rocket, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -49,19 +49,21 @@ const GROUPS: { label: string | null; items: { id: string; label: string; icon: 
   },
 ];
 
-export default function Sidebar({ active = 'overview', domain }: { active?: string; domain?: string }) {
-  return (
-    <aside className="hidden lg:flex w-[244px] shrink-0 flex-col bg-[var(--surface)] border-r border-[var(--border)] h-screen sticky top-0 overflow-y-auto">
-      {/* Brand */}
-      <div className="px-6 h-[68px] flex items-center gap-2.5 border-b border-[var(--border)] shrink-0">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-[0_2px_6px_rgba(22,163,74,0.3)]" style={{ background: 'var(--grad-brand)' }}>
-          <BarChart3 size={18} />
-        </div>
-        <span className="font-bold text-[var(--ink)] text-[17px] tracking-tight">SEO Audit</span>
-      </div>
-
+export default function Sidebar({
+  active = 'overview',
+  domain,
+  open = false,
+  onClose,
+}: {
+  active?: string;
+  domain?: string;
+  open?: boolean;
+  onClose?: () => void;
+}) {
+  const navContent = (
+    <>
       {/* Grouped nav */}
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
+      <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
         {GROUPS.map((group, gi) => (
           <div key={gi} className={gi > 0 ? 'mt-4' : ''}>
             {group.label && (
@@ -71,7 +73,7 @@ export default function Sidebar({ active = 'overview', domain }: { active?: stri
               const isActive = id === active;
               if (soon) {
                 return (
-                  <span key={id} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--ink-3)] cursor-default select-none">
+                  <span key={id} className="flex items-center gap-3 px-3 py-2.5 lg:py-2 rounded-lg text-sm font-medium text-[var(--ink-3)] cursor-default select-none">
                     <Icon size={17} className="text-[var(--ink-3)] opacity-60" />
                     {label}
                     <span className="ml-auto text-[9px] uppercase tracking-wider bg-[var(--surface-2)] border border-[var(--border)] rounded px-1.5 py-0.5">Soon</span>
@@ -82,7 +84,8 @@ export default function Sidebar({ active = 'overview', domain }: { active?: stri
                 <a
                   key={id}
                   href={`#${id}`}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                  onClick={onClose}
+                  className={`flex items-center gap-3 px-3 py-2.5 lg:py-2 rounded-xl text-sm font-medium transition-all min-h-11 lg:min-h-0 ${
                     isActive
                       ? 'bg-[var(--brand-soft)] text-[var(--brand-ink)] shadow-[inset_0_0_0_1px_rgba(22,163,74,0.15)]'
                       : 'text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
@@ -97,10 +100,10 @@ export default function Sidebar({ active = 'overview', domain }: { active?: stri
         ))}
 
         <div className="mt-auto flex flex-col gap-1 pt-4">
-          <a href="#" className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors">
+          <a href="#" className="flex items-center gap-3 px-3 py-2.5 lg:py-2 rounded-lg text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors min-h-11 lg:min-h-0">
             <Settings size={17} className="text-[var(--ink-3)]" /> Settings
           </a>
-          <a href="#" className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors">
+          <a href="#" className="flex items-center gap-3 px-3 py-2.5 lg:py-2 rounded-lg text-sm font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors min-h-11 lg:min-h-0">
             <HelpCircle size={17} className="text-[var(--ink-3)]" /> Help
           </a>
         </div>
@@ -115,6 +118,51 @@ export default function Sidebar({ active = 'overview', domain }: { active?: stri
           </div>
         </div>
       )}
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop fixed sidebar */}
+      <aside className="hidden lg:flex w-[244px] shrink-0 flex-col bg-[var(--surface)] border-r border-[var(--border)] h-screen sticky top-0 overflow-y-auto">
+        <div className="px-6 h-[68px] flex items-center gap-2.5 border-b border-[var(--border)] shrink-0">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-[0_2px_6px_rgba(22,163,74,0.3)]" style={{ background: 'var(--grad-brand)' }}>
+            <BarChart3 size={18} />
+          </div>
+          <span className="font-bold text-[var(--ink)] text-[17px] tracking-tight">SEO Audit</span>
+        </div>
+        {navContent}
+      </aside>
+
+      {/* Mobile drawer + backdrop */}
+      <div className={`lg:hidden fixed inset-0 z-50 no-print ${open ? '' : 'pointer-events-none'}`} aria-hidden={!open}>
+        <div
+          className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`}
+          onClick={onClose}
+        />
+        <aside
+          className={`absolute left-0 top-0 h-full w-[85vw] max-w-[300px] bg-[var(--surface)] shadow-2xl flex flex-col transition-transform duration-200 ease-out ${
+            open ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="px-4 h-[60px] flex items-center justify-between gap-2.5 border-b border-[var(--border)] shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 shadow-[0_2px_6px_rgba(22,163,74,0.3)]" style={{ background: 'var(--grad-brand)' }}>
+                <BarChart3 size={18} />
+              </div>
+              <span className="font-bold text-[var(--ink)] text-[17px] tracking-tight truncate">SEO Audit</span>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close menu"
+              className="w-11 h-11 -mr-2 flex items-center justify-center rounded-lg text-[var(--ink-2)] hover:bg-[var(--surface-2)] shrink-0"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          {navContent}
+        </aside>
+      </div>
+    </>
   );
 }
