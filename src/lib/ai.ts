@@ -5,22 +5,45 @@ import { promisify } from 'node:util';
 const pExecFile = promisify(execFile);
 
 /**
- * Unified AI provider layer with a three-tier fallback:
+ * Unified AI provider layer with a four-tier fallback:
  *
- *  1. OpenAI API   — production path (OPENAI_API_KEY).
- *  2. Anthropic    — secondary probe target for multi-model visibility.
- *  3. Claude CLI   — local-only subscription path: when no API key is set and
+ *  1. Gemini API   — primary production path (GEMINI_API_KEY), via Google's
+ *     OpenAI-compatible endpoint so the same `openai` SDK client works
+ *     unmodified with just a different base URL + model name.
+ *  2. OpenAI API   — used instead of Gemini if OPENAI_API_KEY is set and
+ *     GEMINI_API_KEY is not (kept for operators who prefer OpenAI billing).
+ *  3. Anthropic    — secondary probe target for multi-model visibility.
+ *  4. Claude CLI   — local-only subscription path: when no API key is set and
  *     we're NOT on a serverless host, AI calls shell out to the operator's
  *     `claude -p` (Claude Code subscription). This lets local audits run the
  *     full AI pipeline on subscription tokens at zero API cost. Never used in
  *     production (no CLI exists there), so deployments still need a key.
  */
+export const GEMINI_MODEL = 'gemini-2.5-flash';
 export const OPENAI_MODEL = 'gpt-4o-mini';
 
+type Provider = { client: OpenAI; model: string; label: string };
+
+/** The active OpenAI-compatible provider: Gemini first, then OpenAI. */
+export function activeProvider(): Provider | null {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    return {
+      client: new OpenAI({ apiKey: geminiKey, baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/' }),
+      model: GEMINI_MODEL,
+      label: `Gemini ${GEMINI_MODEL}`,
+    };
+  }
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    return { client: new OpenAI({ apiKey: openaiKey }), model: OPENAI_MODEL, label: `OpenAI ${OPENAI_MODEL}` };
+  }
+  return null;
+}
+
+/** @deprecated use activeProvider() — kept for call sites not yet migrated. */
 export function openaiClient(): OpenAI | null {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
-  return new OpenAI({ apiKey: key });
+  return activeProvider()?.client ?? null;
 }
 
 /** CLI fallback is only meaningful on a local machine, never on Vercel/Lambda. */
@@ -29,12 +52,13 @@ export function cliAvailable(): boolean {
 }
 
 export function isAiConfigured(): boolean {
-  return !!process.env.OPENAI_API_KEY || cliAvailable();
+  return !!activeProvider() || cliAvailable();
 }
 
 /** Which provider a given call will use — surfaced in results/labels. */
 export function aiProviderLabel(): string {
-  if (process.env.OPENAI_API_KEY) return `OpenAI ${OPENAI_MODEL}`;
+  const p = activeProvider();
+  if (p) return p.label;
   if (cliAvailable()) return 'Claude Sonnet (subscription CLI)';
   return 'none';
 }
@@ -48,11 +72,11 @@ export async function aiText(
   user: string,
   opts: { maxTokens?: number } = {},
 ): Promise<string | null> {
-  const oai = openaiClient();
-  if (oai) {
+  const provider = activeProvider();
+  if (provider) {
     try {
-      const r = await oai.chat.completions.create({
-        model: OPENAI_MODEL,
+      const r = await provider.client.chat.completions.create({
+        model: provider.model,
         max_tokens: opts.maxTokens ?? 1000,
         messages: [
           ...(system ? [{ role: 'system' as const, content: system }] : []),
@@ -61,7 +85,7 @@ export async function aiText(
       });
       return r.choices[0]?.message?.content ?? null;
     } catch (e) {
-      console.warn('OpenAI call failed:', e instanceof Error ? e.message : e);
+      console.warn(`${provider.label} call failed:`, e instanceof Error ? e.message : e);
       // fall through to CLI if available (e.g. invalid key locally)
     }
   }

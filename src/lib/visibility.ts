@@ -1,4 +1,4 @@
-import { openaiClient, OPENAI_MODEL, aiText, extractJson, cliAvailable } from '@/lib/ai';
+import { activeProvider, aiText, extractJson, cliAvailable } from '@/lib/ai';
 
 /**
  * Brand Visibility engine v2 — Gumshoe/Profound-style AI answer analysis.
@@ -83,27 +83,28 @@ function deriveCategory(title: string, domain: string): string {
 }
 
 const PROBE_SYSTEM =
-  'You are a helpful shopping/search assistant. Answer the user\'s question naturally with specific brand, product, and website recommendations, as you would for any consumer. After your answer, output exactly two final lines:\n' +
+  'You are a helpful shopping/search assistant. In 3-4 sentences, answer the user\'s question naturally with specific brand, product, and website recommendations, as you would for any consumer. Keep the answer brief — you MUST leave room to also output the two required final lines below; never let the answer run so long that those lines get cut off. After your (brief) answer, output exactly two final lines:\n' +
   'BRANDS: ["Brand One", "Brand Two"] — a JSON array of every brand, company, or website you mentioned.\n' +
   'SOURCES: ["example.com"] — a JSON array of website domains you would cite or point the user to (may be empty).';
 
 interface ProbeTarget { model: string; ask: (prompt: string) => Promise<string> }
 
 /**
- * Build the list of models to probe: OpenAI when keyed; Claude API when keyed;
- * subscription CLI as the local zero-cost fallback when no API key works.
+ * Build the list of models to probe: the active OpenAI-compatible provider
+ * (Gemini or OpenAI) when keyed; Claude API when keyed; subscription CLI as
+ * the local zero-cost fallback when no API key works.
  */
 async function buildProbeTargets(): Promise<ProbeTarget[]> {
   const targets: ProbeTarget[] = [];
 
-  const oai = openaiClient();
-  if (oai) {
+  const provider = activeProvider();
+  if (provider) {
     targets.push({
-      model: `OpenAI ${OPENAI_MODEL}`,
+      model: provider.label,
       ask: async (prompt) => {
-        const r = await oai.chat.completions.create({
-          model: OPENAI_MODEL,
-          max_tokens: 700,
+        const r = await provider.client.chat.completions.create({
+          model: provider.model,
+          max_tokens: 1200,
           messages: [{ role: 'system', content: PROBE_SYSTEM }, { role: 'user', content: prompt }],
         });
         return r.choices[0]?.message?.content ?? '';
@@ -119,7 +120,7 @@ async function buildProbeTargets(): Promise<ProbeTarget[]> {
       ask: async (prompt) => {
         const r = await claude.messages.create({
           model: 'claude-haiku-4-5',
-          max_tokens: 700,
+          max_tokens: 1200,
           system: PROBE_SYSTEM,
           messages: [{ role: 'user', content: prompt }],
         });
@@ -133,7 +134,7 @@ async function buildProbeTargets(): Promise<ProbeTarget[]> {
   if (targets.length === 0 && cliAvailable()) {
     targets.push({
       model: 'Claude Sonnet (CLI)',
-      ask: async (prompt) => (await aiText(PROBE_SYSTEM, prompt, { maxTokens: 700 })) ?? '',
+      ask: async (prompt) => (await aiText(PROBE_SYSTEM, prompt, { maxTokens: 1200 })) ?? '',
     });
   }
 
@@ -156,7 +157,7 @@ async function generatePersonas(category: string): Promise<PersonaDef[]> {
   const raw = await aiText(
     null,
     `Category: "${category}". Invent 3 distinct, realistic buyer personas for this category (like "Weekend Track-Day Enthusiast" or "Budget-Conscious Commuter"). Respond with ONLY JSON, no prose: {"personas":[{"name":"...","description":"one sentence"}]}`,
-    { maxTokens: 500 },
+    { maxTokens: 2500 },
   );
   if (!raw) return [];
   const parsed = extractJson(raw) as { personas?: unknown } | null;
@@ -214,7 +215,7 @@ async function analyzePerception(brand: string, mentionedAnswers: string[]): Pro
     const raw = await aiText(
       null,
       `These are AI assistant answers that mentioned the brand "${brand}":\n\n${mentionedAnswers.join('\n---\n').slice(0, 6000)}\n\nSummarize how the brand was characterized. Respond with ONLY JSON, no prose: {"sentiment":"positive|neutral|mixed|negative","descriptors":["adjective or phrase", ...max 6],"summary":"one sentence"}`,
-      { maxTokens: 300 },
+      { maxTokens: 1500 },
     );
     const parsed = raw ? (extractJson(raw) as { sentiment?: Perception['sentiment']; descriptors?: unknown; summary?: unknown } | null) : null;
     if (parsed?.sentiment) {

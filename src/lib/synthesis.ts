@@ -1,6 +1,6 @@
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
-import { openaiClient, OPENAI_MODEL, aiText, extractJson, cliAvailable } from '@/lib/ai';
+import { activeProvider, aiText, extractJson, cliAvailable } from '@/lib/ai';
 
 /**
  * Zod schema for the AI synthesis. The dashboard consumes every field here,
@@ -108,14 +108,16 @@ Based strictly on this data, produce an SEO analysis. Requirements:
  */
 export async function generateSynthesis(input: SynthesisInput): Promise<Synthesis | null> {
   const prompt = buildPrompt(input);
-  const client = openaiClient();
+  const provider = activeProvider();
 
-  // Preferred path: OpenAI structured outputs (schema-enforced by the API).
-  if (client) {
+  // Preferred path: structured outputs, schema-enforced client-side by the
+  // OpenAI SDK's .parse() helper — works against Gemini too, since Google's
+  // OpenAI-compatible endpoint honors response_format: json_schema.
+  if (provider) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const response = await client.chat.completions.parse({
-          model: OPENAI_MODEL,
+        const response = await provider.client.chat.completions.parse({
+          model: provider.model,
           max_tokens: 8000,
           messages: [{ role: 'user', content: prompt }],
           response_format: zodResponseFormat(SynthesisSchema, 'synthesis'),
