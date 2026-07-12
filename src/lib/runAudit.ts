@@ -415,6 +415,13 @@ export async function runAudit(
 
   await onStage?.('competitors');
   const mainAnalysis = mainResult.value;
+  // A silently-empty scrape must fail the audit, not produce a confidently
+  // wrong report: with no title and no body text the AI stages infer the
+  // category from the domain string alone (observed live: totencarry.com →
+  // "tote bags" instead of luggage, 0% visibility, wrong competitor set).
+  if (!mainAnalysis.onPage.title && mainAnalysis.onPage.wordCount < 30) {
+    throw new Error(`Scrape returned no usable content for ${mainAnalysis.domain} (empty title, ${mainAnalysis.onPage.wordCount} words) — retry the audit`);
+  }
   const competitors = competitorResults
     .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof scrapeSite>>> =>
       r.status === 'fulfilled',

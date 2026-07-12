@@ -33,7 +33,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const db = supabaseAdmin();
   const { data: row, error } = await db
     .from('seo_audits')
-    .select('id, user_id, url, domain, status, stage, overall_score, geo_score, visibility_pct, projected_score, mobile_speed_score, result_json, error_message, created_at, action_proposal')
+    .select('id, user_id, url, domain, status, stage, overall_score, geo_score, visibility_pct, projected_score, mobile_speed_score, result_json, error_message, created_at, updated_at, action_proposal')
     .eq('id', id)
     .maybeSingle();
 
@@ -46,6 +46,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!user || user.id !== row.user_id) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
+  }
+
+  // A background job killed by the platform (e.g. function timeout) leaves
+  // the row in 'running' forever with error null — observed live. Treat any
+  // running job untouched for >3 minutes as dead so pollers stop waiting.
+  if ((row.status === 'running' || row.status === 'queued') && row.updated_at && Date.now() - new Date(row.updated_at).getTime() > 180_000) {
+    await db.from('seo_audits').update({ status: 'error', error_message: 'Audit timed out — the background job stopped reporting. Please retry.' }).eq('id', id).eq('status', row.status);
+    return NextResponse.json({ id: row.id, url: row.url, domain: row.domain, status: 'error', stage: row.stage, error: 'Audit timed out — the background job stopped reporting. Please retry.' });
   }
 
   return NextResponse.json({

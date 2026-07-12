@@ -73,13 +73,35 @@ function targetCandidates(domain: string, title: string): { display: string; key
 }
 
 function deriveCategory(title: string, domain: string): string {
+  const strip = (s: string) =>
+    s
+      .replace(/\b(official site|official store|new|shop|buy|home)\b/gi, ' ')
+      .replace(/[®™©]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  // Drop title segments that are just the brand name (they otherwise leak
+  // into every visibility prompt: "top brands for Tote&Carry?"), keeping the
+  // descriptive category segments ("New Luggage Sets, Suitcases, Travel Bags").
+  const root = norm(domain.replace(/^www\./, '').split('.')[0]);
+  const segments = title
+    .split(/[|–—-]/)
+    .flatMap((s) => s.split(' - '))
+    .map((s) => s.trim())
+    .filter(Boolean);
+  // Compare on boilerplate-stripped text, and treat "&" as "n"/"and" so
+  // "Tote&Carry" matches the domain root "totencarry".
+  const nonBrand = segments.filter((s) => {
+    const base = strip(s);
+    const variants = [base, base.replace(/&/g, 'n'), base.replace(/&/g, 'and')].map(norm).filter(Boolean);
+    return base && !(root && variants.some((n) => n.includes(root) || root.includes(n)));
+  });
+  const joined = strip(nonBrand.join(' '));
+  if (joined) return joined;
+
+  // Fallback: previous behavior — cleaned first segment, then domain root.
   const seg = (title.split(/[|–—]/)[0] || title).split(' - ')[0].trim();
-  const cleaned = seg
-    .replace(/\b(official site|official store|new|shop|buy|home)\b/gi, ' ')
-    .replace(/[®™©]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return cleaned || domain.split('.')[0];
+  return strip(seg) || domain.split('.')[0];
 }
 
 const PROBE_SYSTEM =
@@ -184,14 +206,17 @@ function buildPromptPlan(category: string, keywords: string[], personas: Persona
 
   // Persona-conditioned prompts (Gumshoe's differentiator).
   for (const p of personas) {
+    // Persona names often arrive as "The Savvy Jetsetter" — drop the leading
+    // article so "I'm a the savvy jetsetter" doesn't reach the probe models.
+    const personaRef = p.name.replace(/^the\s+/i, '').toLowerCase();
     plan.push(
       {
-        prompt: `I'm a ${p.name.toLowerCase()} (${p.description}). What ${category} brands would you recommend for me?`,
+        prompt: `I'm a ${personaRef} (${p.description}). What ${category} brands would you recommend for me?`,
         persona: p.name,
         topic: 'Best in category',
       },
       {
-        prompt: `As a ${p.name.toLowerCase()}, how should I choose between ${category} brands? Name the strongest options.`,
+        prompt: `As a ${personaRef}, how should I choose between ${category} brands? Name the strongest options.`,
         persona: p.name,
         topic: 'Comparison',
       },
