@@ -232,10 +232,10 @@ function DashboardContent() {
 
           {/* KPI Row */}
           <section id="overview" className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-5 scroll-mt-20">
-            <StatCard label="Overall SEO Score" value={typeof data.overallScore === 'number' ? `${data.overallScore}/100` : 'N/A'} icon={Search}
+            <StatCard hero label="Overall SEO Score" value={typeof data.overallScore === 'number' ? `${data.overallScore}/100` : 'N/A'} icon={Search}
               tone={data.overallScore == null ? 'amber' : data.overallScore > 80 ? 'brand' : data.overallScore > 50 ? 'amber' : 'red'} />
-            <StatCard label="Brand Visibility" value={typeof data.visibilityPct === 'number' ? `${data.visibilityPct}%` : 'N/A'} icon={Sparkles}
-              tone={data.visibilityPct == null ? 'amber' : data.visibilityPct >= 40 ? 'brand' : data.visibilityPct >= 10 ? 'amber' : 'red'} />
+            <StatCard hero label="Brand Visibility" value={typeof data.visibilityPct === 'number' ? `${data.visibilityPct}%` : 'N/A'} icon={Sparkles}
+              tone={data.visibilityPct == null ? 'amber' : data.visibilityPct >= 40 ? 'blue' : data.visibilityPct >= 10 ? 'amber' : 'red'} />
             <StatCard label="GEO Readiness" value={typeof data.geoScore === 'number' ? `${data.geoScore}/100` : 'N/A'} icon={Sparkles}
               tone={data.geoScore == null ? 'amber' : data.geoScore > 80 ? 'brand' : data.geoScore > 50 ? 'amber' : 'red'} />
             <StatCard label="Mobile Speed" value={data.technical.mobileSpeedScore != null ? `${data.technical.mobileSpeedScore}/100` : 'N/A'} icon={Gauge}

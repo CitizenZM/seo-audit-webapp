@@ -41,9 +41,17 @@
   --text: var(--ink);
   --muted: var(--ink-3);
 
-  --radius: 0.875rem;     /* rounded-xl baseline */
-  --shadow-sm: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06);
-  --shadow-md: 0 2px 8px rgba(16,24,40,0.06), 0 8px 24px rgba(16,24,40,0.05);
+  --radius: 1rem;         /* rounded-2xl baseline — more generous per references */
+  --shadow-sm: 0 1px 2px rgba(16,24,40,0.04), 0 2px 6px rgba(16,24,40,0.05);
+  --shadow-md: 0 4px 12px rgba(16,24,40,0.06), 0 12px 32px rgba(16,24,40,0.08);
+  --shadow-hover: 0 8px 20px rgba(16,24,40,0.08), 0 20px 40px rgba(16,24,40,0.10);
+
+  /* Gradient accent tiles (Cemdash/Salesforce-one style) */
+  --grad-brand: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  --grad-blue: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  --grad-violet: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  --grad-amber: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+  --grad-ink: linear-gradient(135deg, #14151a 0%, #2b2d36 100%);
 }
 
 @theme inline {
@@ -82,6 +90,39 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.card:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+/* Gradient stat tile — for the headline KPI row (Cemdash/Salesforce-one style) */
+.tile-gradient {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.tile-gradient::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120px 120px at 90% -10%, rgba(255,255,255,0.18), transparent 70%);
+  pointer-events: none;
+}
+
+/* Notification bell dot */
+.bell-dot::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--red);
+  border: 2px solid var(--surface);
 }
 
 /* skeleton shimmer */

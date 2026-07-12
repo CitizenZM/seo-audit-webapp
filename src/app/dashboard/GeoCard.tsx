@@ -48,6 +48,14 @@ export default function GeoCard({ geo }: { geo: Geo }) {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <div
+            className="relative w-14 h-14 rounded-full shrink-0"
+            style={{ background: `conic-gradient(${tone.color} ${geo.score * 3.6}deg, var(--surface-2) 0deg)` }}
+          >
+            <div className="absolute inset-[3px] rounded-full bg-[var(--surface)] flex items-center justify-center text-xs font-bold" style={{ color: tone.color }}>
+              {geo.score}
+            </div>
+          </div>
           <div className="text-right">
             <div className="text-[10px] uppercase tracking-wider text-[var(--ink-3)] font-semibold">AI Visibility</div>
             <div className="text-3xl font-extrabold leading-none" style={{ color: tone.color }}>{geo.score}<span className="text-lg text-[var(--ink-3)]">/100</span></div>
@@ -64,7 +72,7 @@ export default function GeoCard({ geo }: { geo: Geo }) {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {geo.botAccess.map((b) => (
-            <div key={b.name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]">
+            <div key={b.name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] hover:border-[var(--brand)]/30 transition-colors">
               <div className="min-w-0">
                 <div className="text-sm font-medium text-[var(--ink)] truncate">{b.name}</div>
                 <div className="text-[11px] text-[var(--ink-3)] truncate">{b.engine}</div>

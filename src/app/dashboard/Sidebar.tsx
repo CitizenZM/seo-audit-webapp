@@ -54,7 +54,7 @@ export default function Sidebar({ active = 'overview', domain }: { active?: stri
     <aside className="hidden lg:flex w-[244px] shrink-0 flex-col bg-[var(--surface)] border-r border-[var(--border)] h-screen sticky top-0 overflow-y-auto">
       {/* Brand */}
       <div className="px-6 h-[68px] flex items-center gap-2.5 border-b border-[var(--border)] shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-[var(--brand)] flex items-center justify-center text-white">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-[0_2px_6px_rgba(22,163,74,0.3)]" style={{ background: 'var(--grad-brand)' }}>
           <BarChart3 size={18} />
         </div>
         <span className="font-bold text-[var(--ink)] text-[17px] tracking-tight">SEO Audit</span>
@@ -82,9 +82,9 @@ export default function Sidebar({ active = 'overview', domain }: { active?: stri
                 <a
                   key={id}
                   href={`#${id}`}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
                     isActive
-                      ? 'bg-[var(--brand-soft)] text-[var(--brand-ink)]'
+                      ? 'bg-[var(--brand-soft)] text-[var(--brand-ink)] shadow-[inset_0_0_0_1px_rgba(22,163,74,0.15)]'
                       : 'text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
                   }`}
                 >

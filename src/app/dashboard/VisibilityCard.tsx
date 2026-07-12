@@ -142,7 +142,7 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
             {visibility.leaderboard.slice(0, 6).map((e, i) => (
               <div
                 key={e.brand + i}
-                className={`grid grid-cols-[2rem_1fr_5rem_5rem] gap-2 px-2 py-2 rounded-lg text-sm items-center ${e.isYou ? 'bg-[var(--brand-soft)] border border-[var(--brand)]/20' : 'border-b border-[var(--border)] last:border-0'}`}
+                className={`grid grid-cols-[2rem_1fr_5rem_5rem] gap-2 px-2 py-2 rounded-lg text-sm items-center transition-colors ${e.isYou ? 'bg-[var(--brand-soft)] border border-[var(--brand)]/20' : 'border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]'}`}
               >
                 <span className="font-bold text-[var(--ink-3)]">{i + 1}</span>
                 <span className={`truncate font-medium ${e.isYou ? 'text-[var(--brand-ink)]' : 'text-[var(--ink)]'}`}>
