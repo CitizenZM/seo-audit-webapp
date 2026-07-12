@@ -215,7 +215,7 @@ async function analyzePerception(brand: string, mentionedAnswers: string[]): Pro
     const raw = await aiText(
       null,
       `These are AI assistant answers that mentioned the brand "${brand}":\n\n${mentionedAnswers.join('\n---\n').slice(0, 6000)}\n\nSummarize how the brand was characterized. Respond with ONLY JSON, no prose: {"sentiment":"positive|neutral|mixed|negative","descriptors":["adjective or phrase", ...max 6],"summary":"one sentence"}`,
-      { maxTokens: 1500 },
+      { maxTokens: 3000 },
     );
     const parsed = raw ? (extractJson(raw) as { sentiment?: Perception['sentiment']; descriptors?: unknown; summary?: unknown } | null) : null;
     if (parsed?.sentiment) {

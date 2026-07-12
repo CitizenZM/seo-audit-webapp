@@ -33,7 +33,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const db = supabaseAdmin();
   const { data: row, error } = await db
     .from('seo_audits')
-    .select('id, user_id, url, domain, status, stage, overall_score, geo_score, visibility_pct, projected_score, mobile_speed_score, result_json, error_message, created_at')
+    .select('id, user_id, url, domain, status, stage, overall_score, geo_score, visibility_pct, projected_score, mobile_speed_score, result_json, error_message, created_at, action_proposal')
     .eq('id', id)
     .maybeSingle();
 
@@ -61,6 +61,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     mobileSpeedScore: row.mobile_speed_score,
     error: row.error_message,
     createdAt: row.created_at,
+    actionProposal: row.action_proposal ?? null,
     // Only ship the (potentially large) full payload once the job is done.
     ...(row.status === 'done' && row.result_json ? { result: row.result_json } : {}),
   });

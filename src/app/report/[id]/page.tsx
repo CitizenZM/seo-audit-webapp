@@ -17,6 +17,7 @@ import TitleTagsOptimizer from '../../dashboard/TitleTagsOptimizer';
 import KeywordIntentChart from '../../dashboard/KeywordIntentChart';
 import KeywordTable from '../../dashboard/KeywordTable';
 import CompetitorGapTable from '../../dashboard/CompetitorGapTable';
+import ActionProposalCard from './ActionProposalCard';
 
 /**
  * The standalone, exportable Audit Report (distinct from the live /dashboard
@@ -47,7 +48,7 @@ export default function ReportPage() {
         if (json.error) throw new Error(json.error);
         setMeta({ url: json.url, domain: json.domain, createdAt: json.createdAt });
         if (json.status === 'done' && json.result) {
-          setData(json.result.data);
+          setData({ ...json.result.data, actionProposal: json.actionProposal ?? null });
           setCompetitors(json.result.competitors || []);
           setStatus('ready');
         } else if (json.status === 'error') {
@@ -134,6 +135,7 @@ export default function ReportPage() {
 
         {/* Headline: Optimization Plan — the deliverable this page exists for */}
         <OptimizationPlanCard plan={data.optimizationPlan ?? null} />
+        <ActionProposalCard auditId={id} initialProposal={data.actionProposal ?? null} />
 
         {/* Executive summary + health radar */}
         {data.synthesis && (
