@@ -6,9 +6,9 @@ import { supabaseServerSession } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-// 120s: a healthy audit finishes in ~45-60s, but AI-stage latency spikes were
-// observed to exceed the old 60s budget, killing the background job mid-run.
-export const maxDuration = 120;
+// 300s (Fluid Compute ceiling): a healthy audit finishes in ~45-60s, but AI +
+// cold-start latency spikes were observed to blow through both 60s and 120s,
+export const maxDuration = 300;
 
 /**
  * Real async audit job (#2, replacing the fake 2.5s progress timer). Creates
