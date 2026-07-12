@@ -5,6 +5,7 @@ import { fetchSerp } from '@/lib/serp';
 import { assertSafeUrl } from '@/lib/urlSafety';
 import { computeScore } from '@/lib/score';
 import { analyzeGeo } from '@/lib/geo';
+import { analyzeVisibility } from '@/lib/visibility';
 
 export type Stage = 'crawl' | 'competitors' | 'speed' | 'ai' | 'serp' | 'done';
 // Returns a Promise — callers MUST await it. An un-awaited progress write can
@@ -401,7 +402,7 @@ export async function runAudit(
     mainAnalysis.onPage.title?.split(/[|\-–—]/)[0]?.trim() || mainAnalysis.domain;
 
   await onStage?.('speed');
-  const [siteCrawlResult, synthesis, serp, geo] = await Promise.all([
+  const [siteCrawlResult, synthesis, serp, geo, visibility] = await Promise.all([
     crawlSite(origin, mainAnalysis._html, mainAnalysis.url).catch((e) => {
       console.warn('Site crawl skipped:', e instanceof Error ? e.message : e);
       return null;
@@ -436,6 +437,17 @@ export async function runAudit(
       console.warn('GEO analysis skipped:', e instanceof Error ? e.message : e);
       return null;
     }),
+    // Brand Visibility — Gumshoe-style prompt probing (needs ANTHROPIC_API_KEY;
+    // null without it). Uses the raw title/domain rather than waiting on the
+    // synthesis keywords so it can run concurrently.
+    analyzeVisibility({
+      domain: mainAnalysis.domain,
+      title: mainAnalysis.onPage.title,
+      competitorDomains: competitors.map((c) => c.domain),
+    }).catch((e) => {
+      console.warn('Visibility probing skipped:', e instanceof Error ? e.message : e);
+      return null;
+    }),
   ]);
 
   // Strip the internal-only raw HTML before returning the response.
@@ -464,8 +476,10 @@ export async function runAudit(
       siteCrawl: siteCrawlResult,
       serp,
       geo,
+      visibility,
       overallScore: scoreBreakdown.overall,
       geoScore: geo?.score ?? null,
+      visibilityPct: visibility?.visibilityPct ?? null,
       scoreBreakdown: scoreBreakdown.components,
     },
     competitors: publicCompetitors,
