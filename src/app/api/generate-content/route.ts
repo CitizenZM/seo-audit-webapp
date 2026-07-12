@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { openaiClient, OPENAI_MODEL } from '@/lib/ai';
+import { aiText, isAiConfigured } from '@/lib/ai';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
@@ -20,8 +20,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const client = openaiClient();
-  if (!client) {
+  if (!isAiConfigured()) {
     return NextResponse.json({ error: 'AI is not configured (OPENAI_API_KEY missing)' }, { status: 502 });
   }
 
@@ -37,13 +36,9 @@ export async function POST(request: Request) {
 
     const outlineList = Array.isArray(outline) ? outline.filter((o: unknown) => typeof o === 'string').slice(0, 12) : [];
 
-    const r = await client.chat.completions.create({
-      model: OPENAI_MODEL,
-      max_tokens: 2500,
-      messages: [
-        {
-          role: 'user',
-          content: `Write a publish-ready blog article draft in Markdown for the website ${typeof domain === 'string' ? domain : ''}.
+    const draftText = await aiText(
+      null,
+      `Write a publish-ready blog article draft in Markdown for the website ${typeof domain === 'string' ? domain : ''}.
 
 Title: ${title}
 Target keyword: ${targetKeyword}
@@ -56,13 +51,11 @@ Requirements (SEO + GEO optimized):
 - Include a short FAQ section (3 questions) at the end
 - Concrete, specific, skimmable; no fluff or filler phrases
 - Start with the H1 title line`,
-        },
-      ],
-    });
+      { maxTokens: 2500 },
+    );
 
-    const draft = r.choices[0]?.message?.content ?? '';
-    if (!draft) return NextResponse.json({ error: 'Generation returned no content' }, { status: 502 });
-    return NextResponse.json({ draft });
+    if (!draftText) return NextResponse.json({ error: 'Generation returned no content' }, { status: 502 });
+    return NextResponse.json({ draft: draftText });
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }

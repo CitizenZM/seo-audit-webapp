@@ -29,7 +29,12 @@ function hostOf(url: string): string {
 
 async function viaSerper(query: string): Promise<SerpResult | null> {
   const key = process.env.SERPER_API_KEY;
-  if (!key) return null;
+  if (!key) {
+    // Silent nulls made this stage undiagnosable in pipeline monitoring —
+    // say why the SERP card will be absent.
+    console.warn('SERP lookup skipped: SERPER_API_KEY not configured.');
+    return null;
+  }
   try {
     const res = await fetch('https://google.serper.dev/search', {
       method: 'POST',

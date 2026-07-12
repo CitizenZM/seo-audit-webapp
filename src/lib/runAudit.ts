@@ -87,6 +87,17 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
     .trim();
   const metaDesc = ($('meta[name="description"]').attr('content') || '').replace(/\s+/g, ' ').trim();
 
+  // Structured data MUST be read BEFORE the script strip below — JSON-LD
+  // lives in <script type="application/ld+json"> tags, and running
+  // detectSchemaTypes after .remove() silently reported every site as having
+  // zero schema (regression caught by a live us.tcl.com test: the homepage
+  // has WebSite + Organization JSON-LD that we reported as []).
+  const schemaTypes = detectSchemaTypes($);
+  const hasReviewsSchema =
+    $('script[type="application/ld+json"]').text().includes('AggregateRating') ||
+    schemaTypes.includes('AggregateRating') ||
+    schemaTypes.includes('Review');
+
   // Strip non-content nodes — including inline <svg>, whose icon <title>/label
   // text would otherwise contaminate H1 extraction and pad the word count.
   $('script, style, noscript, svg').remove();
@@ -116,11 +127,6 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
 
   const hasCartOrCheckout =
     $('a[href*="cart"], a[href*="checkout"], button:contains("Add to cart")').length > 0;
-  const schemaTypes = detectSchemaTypes($);
-  const hasReviewsSchema =
-    $('script[type="application/ld+json"]').text().includes('AggregateRating') ||
-    schemaTypes.includes('AggregateRating') ||
-    schemaTypes.includes('Review');
   const imageCount = $('img').length;
   const imagesWithAlt = $('img[alt]').length;
 
@@ -142,13 +148,20 @@ async function scrapeSite(targetUrl: string, isCompetitor = false) {
       fetch(
         `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(
           targetUrl,
-        )}&strategy=mobile`,
+        )}&strategy=mobile${process.env.PAGESPEED_API_KEY ? `&key=${process.env.PAGESPEED_API_KEY}` : ''}`,
         { signal: AbortSignal.timeout(25000) },
       ),
     ]);
 
     if (robots.status === 'fulfilled' && robots.value.ok) hasRobots = true;
     if (sitemap.status === 'fulfilled' && sitemap.value.ok) hasSitemap = true;
+    // PageSpeed failures were previously invisible — no score, no log line.
+    // Surface WHY (rate limit vs timeout) so a null score is diagnosable.
+    if (pagespeed.status === 'rejected') {
+      console.warn('PageSpeed request failed:', pagespeed.reason instanceof Error ? pagespeed.reason.message : pagespeed.reason);
+    } else if (!pagespeed.value.ok) {
+      console.warn(`PageSpeed returned HTTP ${pagespeed.value.status} — score will be null. Set PAGESPEED_API_KEY to avoid anonymous rate limits.`);
+    }
     if (pagespeed.status === 'fulfilled' && pagespeed.value.ok) {
       try {
         const data = await pagespeed.value.json();
@@ -225,7 +238,7 @@ export function normalizeUrl(raw: string): string {
 function looksLikeHtmlPage(url: string): boolean {
   try {
     const path = new URL(url).pathname.toLowerCase();
-    return !/\.(xml|json|txt|jpe?g|png|gif|webp|svg|pdf|css|js|ico|mp4|webm|xml\.gz|gz)$/.test(path);
+    return !/\.(xml|json|txt|md|markdown|csv|ya?ml|rss|atom|jpe?g|png|gif|webp|svg|pdf|css|js|ico|mp4|webm|xml\.gz|gz)$/.test(path);
   } catch {
     return false;
   }

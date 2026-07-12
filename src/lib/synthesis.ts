@@ -1,6 +1,6 @@
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
-import { openaiClient, OPENAI_MODEL } from '@/lib/ai';
+import { openaiClient, OPENAI_MODEL, aiText, extractJson, cliAvailable } from '@/lib/ai';
 
 /**
  * Zod schema for the AI synthesis. The dashboard consumes every field here,
@@ -107,30 +107,45 @@ Based strictly on this data, produce an SEO analysis. Requirements:
  * Returns null if synthesis cannot be produced (the route degrades gracefully).
  */
 export async function generateSynthesis(input: SynthesisInput): Promise<Synthesis | null> {
-  const client = openaiClient();
-  if (!client) {
-    console.error('OPENAI_API_KEY is not set; skipping AI synthesis.');
-    return null;
-  }
-
   const prompt = buildPrompt(input);
+  const client = openaiClient();
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const response = await client.chat.completions.parse({
-        model: OPENAI_MODEL,
-        max_tokens: 8000,
-        messages: [{ role: 'user', content: prompt }],
-        response_format: zodResponseFormat(SynthesisSchema, 'synthesis'),
-      });
-
-      const parsed = response.choices[0]?.message?.parsed;
-      if (parsed) return parsed;
-      console.error(`Synthesis returned no parsed output (attempt ${attempt + 1})`);
-    } catch (e) {
-      console.error(`Synthesis error (attempt ${attempt + 1}):`, e);
+  // Preferred path: OpenAI structured outputs (schema-enforced by the API).
+  if (client) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await client.chat.completions.parse({
+          model: OPENAI_MODEL,
+          max_tokens: 8000,
+          messages: [{ role: 'user', content: prompt }],
+          response_format: zodResponseFormat(SynthesisSchema, 'synthesis'),
+        });
+        const parsed = response.choices[0]?.message?.parsed;
+        if (parsed) return parsed;
+        console.error(`Synthesis returned no parsed output (attempt ${attempt + 1})`);
+      } catch (e) {
+        console.error(`Synthesis error (attempt ${attempt + 1}):`, e);
+        // An auth error (invalid key) won't recover on retry — try the CLI path.
+        if (cliAvailable()) break;
+      }
     }
   }
 
+  // Local fallback: subscription CLI → JSON → Zod validation (same contract).
+  if (cliAvailable()) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const raw = await aiText(
+        null,
+        `${prompt}\n\nRespond with ONLY a JSON object (no prose, no code fences) with exactly these keys: executiveSummary (string), topPriority (string), topCategoryScores ({onPage,technical,content,links,keywords,schema} integers 0-100), contentGapBrief ({title,rationale,outline:[string]}), keywordOpportunities ([{keyword,intent,difficulty,volume} strings]), contentBriefs ([{id:number,title,targetKeyword,funnelStage,volume,difficulty,goal,outline:[string]}]), titleTags ([{page,current,newTitle,metaDesc,titleChars:number,status}]), contentCalendar ([{month,week,title,type,details} all strings]).`,
+        { maxTokens: 8000 },
+      );
+      if (!raw) continue;
+      const parsed = SynthesisSchema.safeParse(extractJson(raw));
+      if (parsed.success) return parsed.data;
+      console.error(`CLI synthesis failed schema validation (attempt ${attempt + 1}):`, parsed.error?.issues?.slice(0, 3));
+    }
+  }
+
+  console.error('No AI provider produced a valid synthesis.');
   return null;
 }

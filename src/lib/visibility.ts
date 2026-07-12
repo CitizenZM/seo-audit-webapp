@@ -1,4 +1,4 @@
-import { openaiClient, OPENAI_MODEL } from '@/lib/ai';
+import { openaiClient, OPENAI_MODEL, aiText, extractJson, cliAvailable } from '@/lib/ai';
 
 /**
  * Brand Visibility engine v2 — Gumshoe/Profound-style AI answer analysis.
@@ -89,7 +89,10 @@ const PROBE_SYSTEM =
 
 interface ProbeTarget { model: string; ask: (prompt: string) => Promise<string> }
 
-/** Build the list of models to probe: OpenAI always; Claude when key present. */
+/**
+ * Build the list of models to probe: OpenAI when keyed; Claude API when keyed;
+ * subscription CLI as the local zero-cost fallback when no API key works.
+ */
 async function buildProbeTargets(): Promise<ProbeTarget[]> {
   const targets: ProbeTarget[] = [];
 
@@ -125,6 +128,15 @@ async function buildProbeTargets(): Promise<ProbeTarget[]> {
     });
   }
 
+  // Local subscription CLI — only when no API provider is configured, so a
+  // production deployment (which has no CLI) is never silently half-probed.
+  if (targets.length === 0 && cliAvailable()) {
+    targets.push({
+      model: 'Claude Sonnet (CLI)',
+      ask: async (prompt) => (await aiText(PROBE_SYSTEM, prompt, { maxTokens: 700 })) ?? '',
+    });
+  }
+
   return targets;
 }
 
@@ -141,29 +153,18 @@ function parseList(text: string, tag: 'BRANDS' | 'SOURCES'): string[] {
 
 /** Generate buyer personas for the category (Gumshoe-style persona testing). */
 async function generatePersonas(category: string): Promise<PersonaDef[]> {
-  const oai = openaiClient();
-  if (!oai) return [];
-  try {
-    const r = await oai.chat.completions.create({
-      model: OPENAI_MODEL,
-      max_tokens: 500,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'user',
-          content: `Category: "${category}". Invent 3 distinct, realistic buyer personas for this category (like "Weekend Track-Day Enthusiast" or "Budget-Conscious Commuter"). Return JSON: {"personas":[{"name":"...","description":"one sentence"}]}`,
-        },
-      ],
-    });
-    const parsed = JSON.parse(r.choices[0]?.message?.content ?? '{}');
-    return Array.isArray(parsed.personas)
-      ? parsed.personas
-          .filter((p: unknown): p is PersonaDef => !!p && typeof (p as PersonaDef).name === 'string')
-          .slice(0, 3)
-      : [];
-  } catch {
-    return [];
-  }
+  const raw = await aiText(
+    null,
+    `Category: "${category}". Invent 3 distinct, realistic buyer personas for this category (like "Weekend Track-Day Enthusiast" or "Budget-Conscious Commuter"). Respond with ONLY JSON, no prose: {"personas":[{"name":"...","description":"one sentence"}]}`,
+    { maxTokens: 500 },
+  );
+  if (!raw) return [];
+  const parsed = extractJson(raw) as { personas?: unknown } | null;
+  return Array.isArray(parsed?.personas)
+    ? parsed.personas
+        .filter((p: unknown): p is PersonaDef => !!p && typeof (p as PersonaDef).name === 'string')
+        .slice(0, 3)
+    : [];
 }
 
 interface PlannedPrompt { prompt: string; persona: string; topic: string }
@@ -203,33 +204,29 @@ function buildPromptPlan(category: string, keywords: string[], personas: Persona
 
 /** Summarize how the models characterized the brand (sentiment + descriptors). */
 async function analyzePerception(brand: string, mentionedAnswers: string[]): Promise<Perception | null> {
-  const oai = openaiClient();
-  if (!oai) return null;
   if (mentionedAnswers.length === 0) {
     return { sentiment: 'not_discussed', descriptors: [], summary: `${brand} was not mentioned in any AI answer, so no brand perception exists yet.` };
   }
-  try {
-    const r = await oai.chat.completions.create({
-      model: OPENAI_MODEL,
-      max_tokens: 300,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'user',
-          content: `These are AI assistant answers that mentioned the brand "${brand}":\n\n${mentionedAnswers.join('\n---\n').slice(0, 6000)}\n\nSummarize how the brand was characterized. Return JSON: {"sentiment":"positive|neutral|mixed|negative","descriptors":["adjective or phrase", ...max 6],"summary":"one sentence"}`,
-        },
-      ],
-    });
-    const parsed = JSON.parse(r.choices[0]?.message?.content ?? '{}');
-    if (!parsed.sentiment) return null;
-    return {
-      sentiment: parsed.sentiment,
-      descriptors: Array.isArray(parsed.descriptors) ? parsed.descriptors.slice(0, 6) : [],
-      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
-    };
-  } catch {
-    return null;
+  // One retry — a single flaky AI response shouldn't blank out the whole
+  // perception panel (observed on a live run: every other visibility field
+  // populated while perception came back null with nothing logged).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const raw = await aiText(
+      null,
+      `These are AI assistant answers that mentioned the brand "${brand}":\n\n${mentionedAnswers.join('\n---\n').slice(0, 6000)}\n\nSummarize how the brand was characterized. Respond with ONLY JSON, no prose: {"sentiment":"positive|neutral|mixed|negative","descriptors":["adjective or phrase", ...max 6],"summary":"one sentence"}`,
+      { maxTokens: 300 },
+    );
+    const parsed = raw ? (extractJson(raw) as { sentiment?: Perception['sentiment']; descriptors?: unknown; summary?: unknown } | null) : null;
+    if (parsed?.sentiment) {
+      return {
+        sentiment: parsed.sentiment,
+        descriptors: Array.isArray(parsed.descriptors) ? (parsed.descriptors as string[]).slice(0, 6) : [],
+        summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      };
+    }
+    console.warn(`Perception analysis attempt ${attempt + 1} failed (${raw ? 'unparseable response' : 'no response'})`);
   }
+  return null;
 }
 
 function slice(results: PromptResult[], key: (r: PromptResult) => string): Slice[] {
