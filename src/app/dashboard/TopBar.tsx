@@ -4,7 +4,12 @@ import { useState } from 'react';
 import { Search, RefreshCw, Share2, Download, Bell, Check } from 'lucide-react';
 import AccountMenu from '@/app/AccountMenu';
 
-const NAV_LINKS = ['Reports', 'Insights', 'Roadmap', 'Help'];
+const NAV_LINKS: { label: string; href: string }[] = [
+  { label: 'Reports', href: '/reports' },
+  { label: 'Insights', href: '#' },
+  { label: 'Roadmap', href: '#' },
+  { label: 'Help', href: '#' },
+];
 
 export default function TopBar({ url }: { url?: string }) {
   const [shared, setShared] = useState(false);
@@ -20,7 +25,7 @@ export default function TopBar({ url }: { url?: string }) {
       {/* Horizontal utility nav — Salesforce-one style */}
       <nav className="no-print hidden xl:flex items-center gap-6 text-sm font-medium text-[var(--ink-2)]">
         {NAV_LINKS.map((l) => (
-          <a key={l} href="#" className="hover:text-[var(--ink)] transition-colors">{l}</a>
+          <a key={l.label} href={l.href} className="hover:text-[var(--ink)] transition-colors">{l.label}</a>
         ))}
       </nav>
 

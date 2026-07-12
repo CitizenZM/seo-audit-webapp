@@ -2,7 +2,7 @@
 
 import {
   LayoutDashboard, Zap, Search, Users, FileText, BarChart3, Settings, HelpCircle,
-  Sparkles, Eye, Trophy, Quote, PenLine, UserRound, TrendingUp,
+  Sparkles, Eye, Trophy, Quote, PenLine, UserRound, TrendingUp, Rocket,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -37,7 +37,7 @@ const GROUPS: { label: string | null; items: { id: string; label: string; icon: 
       { id: 'technical', label: 'Technical audit', icon: Zap },
       { id: 'competitors', label: 'Competitor gap', icon: Users },
       { id: 'content', label: 'Content plan', icon: FileText },
-      { id: 'reports', label: 'Action plan', icon: BarChart3 },
+      { id: 'reports', label: 'Optimization plan', icon: Rocket },
     ],
   },
   {

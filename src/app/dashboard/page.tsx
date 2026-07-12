@@ -8,6 +8,7 @@ import TopBar from './TopBar';
 import StatCard from './StatCard';
 import GeoCard from './GeoCard';
 import VisibilityCard from './VisibilityCard';
+import OptimizationPlanCard from './OptimizationPlanCard';
 import CitationsCard from './CitationsCard';
 import TrendsCard from './TrendsCard';
 import { saveAudit, previousScore } from '@/lib/history';
@@ -52,7 +53,7 @@ function DashboardContent() {
     let cancelled = false;
     let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
-    function finish(resultData: unknown, resultCompetitors: unknown[]) {
+    function finish(resultData: unknown, resultCompetitors: unknown[], jobId?: string) {
       if (cancelled) return;
       setData(resultData);
       setCompetitors(resultCompetitors || []);
@@ -61,6 +62,8 @@ function DashboardContent() {
       // Uses the composite overallScore (always a number, unlike the raw
       // PageSpeed mobileSpeedScore which can be null — B5), so history/email
       // trends are never skipped just because PageSpeed had an off day.
+      // The job id (when Supabase persisted it) links to /report/[id] — the
+      // exportable report page — from the Reports dashboard.
       const d = resultData as { url: string; domain: string; overallScore?: number };
       const measuredScore: number = d.overallScore ?? 0;
       try {
@@ -71,6 +74,7 @@ function DashboardContent() {
           score: measuredScore,
           competitors: (resultCompetitors || []).length,
           timestamp: Date.now(),
+          id: jobId,
         });
       } catch { /* non-fatal */ }
       setLoading(false);
@@ -85,7 +89,7 @@ function DashboardContent() {
 
         setStage(json.stage ?? 'queued');
         if (json.status === 'done' && json.result) {
-          finish(json.result.data, json.result.competitors);
+          finish(json.result.data, json.result.competitors, jobId);
           return;
         }
         if (json.status === 'error') {
@@ -156,6 +160,7 @@ function DashboardContent() {
                   { key: 'speed', label: 'Check speed & UX' },
                   { key: 'ai', label: 'AI synthesis' },
                   { key: 'serp', label: 'Live SERP lookup' },
+                  { key: 'plan', label: 'Build optimization plan' },
                 ].map(({ key, label }, i, arr) => {
                   const stageIdx = arr.findIndex((s) => s.key === stage);
                   const isDone = stageIdx > i || stage === 'done';
@@ -580,6 +585,7 @@ function DashboardContent() {
 
           {/* Action Plan Board & Content Calendar */}
           <section id="reports" className="flex flex-col gap-5 scroll-mt-20">
+            <OptimizationPlanCard plan={data.optimizationPlan ?? null} />
             {data.synthesis?.contentCalendar && <ContentCalendar calendar={data.synthesis.contentCalendar} />}
             <ActionPlanBoard data={data} />
             <EmailReport url={data.url} domain={data.domain} score={data.overallScore} previousScore={priorScore} />

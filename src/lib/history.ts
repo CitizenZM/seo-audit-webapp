@@ -11,6 +11,11 @@ export interface AuditRecord {
   score: number;
   competitors: number;
   timestamp: number;
+  /** Supabase seo_audits row id, when persistence is configured — the
+   * capability link used by /reports and /report/[id] for anonymous users
+   * (same privacy model as the Share button: unguessable id, never a public
+   * listing). Absent when persistence isn't configured. */
+  id?: string;
 }
 
 const KEY = 'seo-audit-history';

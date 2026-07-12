@@ -131,6 +131,7 @@ export async function POST(request: Request) {
           overall_score: result.data.overallScore,
           geo_score: result.data.geoScore,
           visibility_pct: result.data.visibilityPct,
+          projected_score: result.data.optimizationPlan?.projectedOverallScore ?? null,
           mobile_speed_score: result.data.technical.mobileSpeedScore,
           result_json: result,
           updated_at: new Date().toISOString(),

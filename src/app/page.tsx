@@ -104,6 +104,10 @@ export default function Home() {
 
       <RecentAudits />
 
+      <a href="/reports" className="mt-4 text-sm font-medium text-[var(--brand-ink)] hover:underline">
+        View all reports →
+      </a>
+
       <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-6 text-center max-w-3xl">
         {[
           { n: 1, label: 'Crawl Site & Sitemap', tone: 'var(--blue)', soft: 'var(--blue-soft)' },

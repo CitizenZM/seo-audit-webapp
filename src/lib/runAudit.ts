@@ -6,8 +6,9 @@ import { assertSafeUrl } from '@/lib/urlSafety';
 import { computeScore } from '@/lib/score';
 import { analyzeGeo } from '@/lib/geo';
 import { analyzeVisibility } from '@/lib/visibility';
+import { generateOptimizationPlan } from '@/lib/optimizationPlan';
 
-export type Stage = 'crawl' | 'competitors' | 'speed' | 'ai' | 'serp' | 'done';
+export type Stage = 'crawl' | 'competitors' | 'speed' | 'ai' | 'serp' | 'plan' | 'done';
 // Returns a Promise — callers MUST await it. An un-awaited progress write can
 // race with (and clobber) the final completion write that follows it, since
 // both target the same DB row; awaiting guarantees write ordering.
@@ -495,6 +496,48 @@ export async function runAudit(
     synthesis: synthesis ? { topCategoryScores: synthesis.topCategoryScores } : null,
   });
 
+  // Optimization Plan: needs the FINAL scores as input, so it can't run in
+  // the earlier parallel phase — this is a deliberate extra AI call at the
+  // end of the pipeline, not an oversight.
+  await onStage?.('plan');
+  const technicalIssues: string[] = [];
+  if (!publicMainAnalysis.technical.isHttps) technicalIssues.push('Site is not served over HTTPS');
+  if (!publicMainAnalysis.technical.hasRobotsTxt) technicalIssues.push('No robots.txt found');
+  if (!publicMainAnalysis.technical.hasSitemapXml) technicalIssues.push('No sitemap.xml found');
+  if (publicMainAnalysis.technical.mobileSpeedScore != null && publicMainAnalysis.technical.mobileSpeedScore < 60) {
+    technicalIssues.push(`Mobile PageSpeed score is low (${publicMainAnalysis.technical.mobileSpeedScore}/100)`);
+  }
+  if (siteCrawlResult) {
+    if (siteCrawlResult.pagesMissingMeta > 0) technicalIssues.push(`${siteCrawlResult.pagesMissingMeta} crawled page(s) missing a meta description`);
+    if (siteCrawlResult.thinContentPages > 0) technicalIssues.push(`${siteCrawlResult.thinContentPages} crawled page(s) have thin content (<300 words)`);
+  }
+
+  const onPageIssues: string[] = [];
+  if (publicMainAnalysis.onPage.h1Count === 0) onPageIssues.push('Homepage has zero H1 tags');
+  else if (publicMainAnalysis.onPage.h1Count > 1) onPageIssues.push(`Homepage has ${publicMainAnalysis.onPage.h1Count} H1 tags (should be exactly 1)`);
+  if (publicMainAnalysis.onPage.titleLength > 60) onPageIssues.push(`Title tag is ${publicMainAnalysis.onPage.titleLength} chars (over the 60-char SERP limit)`);
+  if (publicMainAnalysis.onPage.metaDescLength < 120 || publicMainAnalysis.onPage.metaDescLength > 160) {
+    onPageIssues.push(`Meta description is ${publicMainAnalysis.onPage.metaDescLength} chars (optimal range is 120-160)`);
+  }
+  if (!publicMainAnalysis.schema.hasOrganization && !publicMainAnalysis.schema.hasProduct) onPageIssues.push('No Organization or Product structured data (JSON-LD) found');
+  if (!publicMainAnalysis.cro.hasReviewsSchema) onPageIssues.push('No Review/AggregateRating schema found');
+
+  const geoIssues = geo?.recommendations ?? [];
+
+  const optimizationPlan = await generateOptimizationPlan({
+    domain: publicMainAnalysis.domain,
+    overallScore: scoreBreakdown.overall,
+    scoreBreakdown: scoreBreakdown.components,
+    geoScore: geo?.score ?? null,
+    visibilityPct: visibility?.visibilityPct ?? null,
+    technicalIssues,
+    onPageIssues,
+    geoIssues,
+  }).catch((e) => {
+    console.warn('Optimization plan skipped:', e instanceof Error ? e.message : e);
+    return null;
+  });
+
   await onStage?.('done');
 
   return {
@@ -505,6 +548,7 @@ export async function runAudit(
       serp,
       geo,
       visibility,
+      optimizationPlan,
       overallScore: scoreBreakdown.overall,
       geoScore: geo?.score ?? null,
       visibilityPct: visibility?.visibilityPct ?? null,
