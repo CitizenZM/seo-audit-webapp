@@ -88,8 +88,8 @@ export default function ContentBriefs({ briefs }: { briefs: Array<Record<string,
             {/* Meta Tags */}
             <div className="flex flex-wrap gap-2 mb-4">
               <span className="bg-[var(--surface-2)] border border-[var(--border)] rounded-full px-3 py-1 text-xs text-[var(--muted)]">Target Keyword: <strong className="text-[var(--ink)]">{String(brief.targetKeyword)}</strong></span>
-              <span className="bg-[var(--surface-2)] border border-[var(--border)] rounded-full px-3 py-1 text-xs text-[var(--muted)]">Volume: <strong className="text-[var(--ink)]">{String(brief.volume)}</strong></span>
-              <span className="bg-[var(--surface-2)] border border-[var(--border)] rounded-full px-3 py-1 text-xs text-[var(--muted)]">Difficulty: <strong className="text-[var(--ink)]">{String(brief.difficulty)}</strong></span>
+              <span className="bg-[var(--surface-2)] border border-[var(--border)] rounded-full px-3 py-1 text-xs text-[var(--muted)]">Volume (AI est.): <strong className="text-[var(--ink)]">{String(brief.volume)}</strong></span>
+              <span className="bg-[var(--surface-2)] border border-[var(--border)] rounded-full px-3 py-1 text-xs text-[var(--muted)]">Difficulty (AI est.): <strong className="text-[var(--ink)]">{String(brief.difficulty)}</strong></span>
               <span className="bg-[var(--surface-2)] border border-[var(--border)] rounded-full px-3 py-1 text-xs text-[var(--muted)]">Funnel Stage: <strong className="text-[var(--ink)]">{String(brief.funnelStage)}</strong></span>
             </div>
 

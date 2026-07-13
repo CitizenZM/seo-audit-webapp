@@ -134,7 +134,7 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
 
         {/* Competitive leaderboard */}
         <div id="leaderboard" className="scroll-mt-20">
-          <div className="text-xs uppercase tracking-wider font-semibold text-[var(--ink-3)] mb-2">Competitive Leaderboard</div>
+          <div className="text-xs uppercase tracking-wider font-semibold text-[var(--ink-3)] mb-2">Competitive Leaderboard <span className="normal-case font-normal opacity-70">— brand mentions in AI answers, not Google rank</span></div>
           <div className="flex flex-col">
             <div className="grid grid-cols-[1.5rem_1fr_4rem_4rem] sm:grid-cols-[2rem_1fr_5rem_5rem] gap-1.5 sm:gap-2 px-2 py-1.5 text-[10px] sm:text-[11px] uppercase tracking-wider text-[var(--ink-3)] font-semibold">
               <span>Rank</span><span>Brand</span><span className="text-right">Mentions</span><span className="text-right">Visibility</span>

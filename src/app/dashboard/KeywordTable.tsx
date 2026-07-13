@@ -20,8 +20,8 @@ export default function KeywordTable({ keywords }: { keywords: Keyword[] }) {
             <tr>
               <th className="px-4 sm:px-6 py-3 sm:py-4">Keyword</th>
               <th className="px-4 sm:px-6 py-3 sm:py-4">Intent</th>
-              <th className="px-4 sm:px-6 py-3 sm:py-4">Difficulty</th>
-              <th className="px-4 sm:px-6 py-3 sm:py-4">Est. Volume</th>
+              <th className="px-4 sm:px-6 py-3 sm:py-4">Difficulty <span className="normal-case font-normal opacity-70">(AI est.)</span></th>
+              <th className="px-4 sm:px-6 py-3 sm:py-4">Volume <span className="normal-case font-normal opacity-70">(AI est.)</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
