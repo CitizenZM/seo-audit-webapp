@@ -34,7 +34,7 @@ export default function StatCard({ label, value, icon: Icon, delta, deltaSuffix 
               <Icon size={16} className="sm:hidden" />
               <Icon size={18} className="hidden sm:block" />
             </div>
-            <span className="text-xs sm:text-sm font-medium text-white/85 truncate">{label}</span>
+            <span className="text-xs sm:text-sm font-medium text-white/85 leading-tight line-clamp-2">{label}</span>
           </div>
           <MoreHorizontal size={18} className="hidden sm:block text-white/60 shrink-0" />
         </div>
@@ -60,7 +60,7 @@ export default function StatCard({ label, value, icon: Icon, delta, deltaSuffix 
             <Icon size={16} className="sm:hidden" />
             <Icon size={18} className="hidden sm:block" />
           </div>
-          <span className="text-xs sm:text-sm font-medium text-[var(--ink-2)] truncate">{label}</span>
+          <span className="text-xs sm:text-sm font-medium text-[var(--ink-2)] leading-tight line-clamp-2">{label}</span>
         </div>
         <MoreHorizontal size={18} className="hidden sm:block text-[var(--ink-3)] shrink-0" />
       </div>
