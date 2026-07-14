@@ -27,17 +27,17 @@ export default function StatCard({ label, value, icon: Icon, delta, deltaSuffix 
 
   if (hero) {
     return (
-      <div className="tile-gradient p-5" style={{ background: t.grad }}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-white/15 text-white">
+      <div className="tile-gradient p-4 sm:p-5" style={{ background: t.grad }}>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-start gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center bg-white/15 text-white shrink-0">
               <Icon size={18} />
             </div>
-            <span className="text-sm font-medium text-white/85">{label}</span>
+            <span className="text-xs sm:text-sm font-medium text-white/85 leading-tight line-clamp-2 pt-0.5 sm:pt-1">{label}</span>
           </div>
-          <MoreHorizontal size={18} className="text-white/60" />
+          <MoreHorizontal size={18} className="hidden sm:block text-white/60 shrink-0" />
         </div>
-        <div className="text-[30px] font-extrabold text-white leading-none tracking-tight mb-3">{value}</div>
+        <div className="text-[24px] sm:text-[30px] font-extrabold text-white leading-none tracking-tight mb-3">{value}</div>
         {delta !== undefined && (
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-md bg-white/15 text-white">
@@ -52,18 +52,18 @@ export default function StatCard({ label, value, icon: Icon, delta, deltaSuffix 
   }
 
   return (
-    <div className="card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: t.soft, color: t.ink }}>
+    <div className="card p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-2 mb-4">
+        <div className="flex items-start gap-2 sm:gap-2.5 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: t.soft, color: t.ink }}>
             <Icon size={18} />
           </div>
-          <span className="text-sm font-medium text-[var(--ink-2)]">{label}</span>
+          <span className="text-xs sm:text-sm font-medium text-[var(--ink-2)] leading-tight line-clamp-2 pt-0.5 sm:pt-1">{label}</span>
         </div>
-        <MoreHorizontal size={18} className="text-[var(--ink-3)]" />
+        <MoreHorizontal size={18} className="hidden sm:block text-[var(--ink-3)] shrink-0" />
       </div>
 
-      <div className="text-[28px] font-extrabold text-[var(--ink)] leading-none tracking-tight mb-3">{value}</div>
+      <div className="text-[22px] sm:text-[28px] font-extrabold text-[var(--ink)] leading-none tracking-tight mb-3">{value}</div>
 
       {delta !== undefined && (
         <div className="flex items-center gap-2">

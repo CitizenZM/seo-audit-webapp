@@ -50,24 +50,24 @@ export default function ReportsPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
-      <header className="h-[68px] sticky top-0 z-40 bg-[var(--surface)]/90 backdrop-blur-md border-b border-[var(--border)] flex items-center px-6 gap-3">
+      <header className="h-[60px] sm:h-[68px] sticky top-0 z-40 bg-[var(--surface)]/90 backdrop-blur-md border-b border-[var(--border)] flex items-center px-3 sm:px-6 gap-2 sm:gap-3">
         <Link href="/" className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0" style={{ background: 'var(--grad-brand)' }}>
           <BarChart3 size={16} />
         </Link>
-        <div>
-          <h1 className="text-[16px] font-bold text-[var(--ink)] tracking-tight">Reports</h1>
-          <p className="text-xs text-[var(--ink-3)]">Every audit you&apos;ve run, ready to view or export</p>
+        <div className="min-w-0">
+          <h1 className="text-[15px] sm:text-[16px] font-bold text-[var(--ink)] tracking-tight truncate">Reports</h1>
+          <p className="hidden sm:block text-xs text-[var(--ink-3)]">Every audit you&apos;ve run, ready to view or export</p>
         </div>
         <Link
           href="/"
-          className="ml-auto flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-white text-sm font-semibold hover:brightness-105 transition-all"
+          className="ml-auto flex items-center gap-1.5 h-10 sm:h-9 px-2.5 sm:px-3.5 rounded-lg text-white text-sm font-semibold hover:brightness-105 transition-all shrink-0"
           style={{ background: 'var(--grad-brand)' }}
         >
-          <Search size={15} /> New Audit
+          <Search size={15} /> <span className="hidden sm:inline">New Audit</span>
         </Link>
       </header>
 
-      <main className="max-w-[900px] mx-auto p-6">
+      <main className="max-w-[900px] mx-auto p-4 sm:p-6">
         {audits === null && !error && (
           <div className="flex items-center justify-center py-24">
             <Loader2 size={22} className="animate-spin text-[var(--brand)]" />
