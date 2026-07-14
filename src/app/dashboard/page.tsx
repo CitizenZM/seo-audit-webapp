@@ -8,6 +8,7 @@ import TopBar from './TopBar';
 import StatCard from './StatCard';
 import GeoCard from './GeoCard';
 import VisibilityCard from './VisibilityCard';
+import KeywordRankingsCard from './KeywordRankingsCard';
 import OptimizationPlanCard from './OptimizationPlanCard';
 import CitationsCard from './CitationsCard';
 import TrendsCard from './TrendsCard';
@@ -252,6 +253,8 @@ function DashboardContent() {
 
           {/* Brand Visibility — Gumshoe-style visibility audit (headline section) */}
           <VisibilityCard visibility={data.visibility ?? null} domain={data.domain} />
+
+          <KeywordRankingsCard keywordRankings={data.keywordRankings ?? null} />
 
           {/* Citation audit — which domains AI models cite in this category */}
           {data.visibility?.citations?.length > 0 && (

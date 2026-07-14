@@ -13,7 +13,7 @@ import type { LucideIcon } from 'lucide-react';
  *   Act       → what to change (do)
  *   Configure → setup (personas coming later)
  */
-const GROUPS: { label: string | null; items: { id: string; label: string; icon: LucideIcon; soon?: boolean }[] }[] = [
+const GROUPS: { label: string | null; items: { id: string; label: string; icon: LucideIcon; soon?: boolean; href?: string }[] }[] = [
   {
     label: null,
     items: [
@@ -29,6 +29,7 @@ const GROUPS: { label: string | null; items: { id: string; label: string; icon: 
       { id: 'citations', label: 'Citation audit', icon: Quote },
       { id: 'trends', label: 'Trends', icon: TrendingUp },
       { id: 'keywords', label: 'Keywords', icon: Search },
+      { id: 'clients', label: 'Clients', icon: Users, href: '/clients' },
     ],
   },
   {
@@ -69,7 +70,7 @@ export default function Sidebar({
             {group.label && (
               <div className="px-3 pb-1.5 text-[10px] uppercase tracking-widest font-bold text-[var(--ink-3)]">{group.label}</div>
             )}
-            {group.items.map(({ id, label, icon: Icon, soon }) => {
+            {group.items.map(({ id, label, icon: Icon, soon, href }) => {
               const isActive = id === active;
               if (soon) {
                 return (
@@ -83,7 +84,7 @@ export default function Sidebar({
               return (
                 <a
                   key={id}
-                  href={`#${id}`}
+                  href={href ?? `#${id}`}
                   onClick={onClose}
                   className={`flex items-center gap-3 px-3 py-2.5 lg:py-2 rounded-xl text-sm font-medium transition-all min-h-11 lg:min-h-0 ${
                     isActive

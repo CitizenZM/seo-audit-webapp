@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import { launchBrowser } from '@/lib/browser';
 import { generateSynthesis } from '@/lib/synthesis';
-import { fetchSerp } from '@/lib/serp';
+import { fetchSerp, fetchKeywordRankings } from '@/lib/serp';
 import { assertSafeUrl } from '@/lib/urlSafety';
 import { computeScore } from '@/lib/score';
 import { analyzeGeo } from '@/lib/geo';
@@ -486,6 +486,25 @@ export async function runAudit(
     }),
   ]);
 
+  // Real keyword rankings (#4 upgrade): look up the top non-brand keyword
+  // opportunities from synthesis against live Google results, so the
+  // dashboard can show measured positions instead of AI-estimated ones. Runs
+  // after synthesis (it depends on synthesis.keywordOpportunities) rather
+  // than in the earlier concurrent phase.
+  const brandRoot = mainAnalysis.domain.replace(/^www\./, '').split('.')[0].toLowerCase();
+  const nonBrandKeywords = (synthesis?.keywordOpportunities ?? [])
+    .map((k) => k.keyword)
+    .filter((kw) => kw && !kw.toLowerCase().includes(brandRoot) && !kw.toLowerCase().includes(mainAnalysis.domain.toLowerCase()))
+    .slice(0, 5);
+  const keywordRankings = await fetchKeywordRankings(
+    nonBrandKeywords,
+    mainAnalysis.domain,
+    competitors.map((c) => c.domain),
+  ).catch((e) => {
+    console.warn('Keyword ranking lookup skipped:', e instanceof Error ? e.message : e);
+    return [];
+  });
+
   // Strip the internal-only raw HTML before returning the response.
   const { _html: _mainHtml, ...publicMainAnalysis } = mainAnalysis;
   void _mainHtml;
@@ -553,6 +572,7 @@ export async function runAudit(
       synthesis,
       siteCrawl: siteCrawlResult,
       serp,
+      keywordRankings,
       geo,
       visibility,
       optimizationPlan,
