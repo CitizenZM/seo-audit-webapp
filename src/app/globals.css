@@ -158,4 +158,5 @@ body {
   }
   .print-header .print-url { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
   .print-header .print-meta { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
+  .print-header .print-logo { max-height: 40px; max-width: 220px; object-fit: contain; margin-bottom: 8px; }
 }
