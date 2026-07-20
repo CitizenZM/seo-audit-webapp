@@ -7,6 +7,19 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
+ * Vercel validates a Log Drain endpoint by requiring the expected
+ * `x-vercel-verify` value in response headers. The value is shown in the
+ * drain-creation error/API response — set it as VERCEL_LOG_DRAIN_VERIFY.
+ */
+const VERIFY_HEADERS: Record<string, string> = process.env.VERCEL_LOG_DRAIN_VERIFY
+  ? { 'x-vercel-verify': process.env.VERCEL_LOG_DRAIN_VERIFY }
+  : {};
+
+export async function HEAD() {
+  return new Response(null, { status: 200, headers: VERIFY_HEADERS });
+}
+
+/**
  * POST /api/crawler-logs
  *
  * Ingestion endpoint for a Vercel Log Drain (or a generic { entries } test
@@ -21,7 +34,7 @@ export async function POST(request: Request) {
   const secret = process.env.CRAWLER_LOGS_SECRET;
   const provided = request.headers.get('x-crawler-secret');
   if (!secret || !provided || provided !== secret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: VERIFY_HEADERS });
   }
 
   const limit = rateLimit(`crawler-logs:${clientIp(request)}`, 60, 60 * 1000);
@@ -42,7 +55,10 @@ export async function POST(request: Request) {
   const hits = filterAiCrawlerHits(entries);
   const saved = await saveCrawlerHits(hits, domain);
 
-  return NextResponse.json({ received: entries.length, matched: hits.length, saved });
+  return NextResponse.json(
+    { received: entries.length, matched: hits.length, saved },
+    { headers: VERIFY_HEADERS },
+  );
 }
 
 /**

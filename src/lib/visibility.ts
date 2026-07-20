@@ -214,6 +214,24 @@ async function buildProbeTargets(): Promise<ProbeTarget[]> {
     });
   }
 
+  // Agnes AI — free OpenAI-compatible gateway (apihub.agnes-ai.com), when
+  // AGNES_API_KEY is set. Adds an independent engine at zero marginal cost.
+  if (process.env.AGNES_API_KEY) {
+    const agnes = new OpenAI({ apiKey: process.env.AGNES_API_KEY, baseURL: 'https://apihub.agnes-ai.com/v1' });
+    const agnesModel = process.env.AGNES_MODEL || 'agnes-2.0-flash';
+    targets.push({
+      model: `Agnes ${agnesModel}`,
+      ask: async (prompt) => {
+        const r = await agnes.chat.completions.create({
+          model: agnesModel,
+          max_tokens: 1200,
+          messages: [{ role: 'system', content: PROBE_SYSTEM }, { role: 'user', content: prompt }],
+        });
+        return r.choices[0]?.message?.content ?? '';
+      },
+    });
+  }
+
   // Local subscription CLI — only when no API provider is configured, so a
   // production deployment (which has no CLI) is never silently half-probed.
   if (targets.length === 0 && cliAvailable()) {
