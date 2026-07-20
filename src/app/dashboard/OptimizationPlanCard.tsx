@@ -2,6 +2,15 @@
 
 import { Rocket, ArrowRight, Zap, CheckCircle2 } from 'lucide-react';
 import type { OptimizationPlan } from '@/lib/optimizationPlan';
+import Explainer from './Explainer';
+
+const optimizationExplainer = {
+  what: "AI-generated action plan from this audit's actual findings: per-category actions with effort/impact and a projected score if implemented.",
+  actions: [
+    'Start with the quick wins, then work high-impact/low-effort items.',
+    'Re-audit after implementation to compare projected vs. actual score.',
+  ],
+};
 
 const EFFORT_TONE: Record<string, string> = { Low: 'var(--pass)', Medium: 'var(--warn)', High: 'var(--fail)' };
 const IMPACT_TONE: Record<string, string> = { Low: 'var(--ink-3)', Medium: 'var(--blue)', High: 'var(--brand)' };
@@ -13,7 +22,19 @@ const IMPACT_TONE: Record<string, string> = { Low: 'var(--ink-3)', Medium: 'var(
  * category, plus concrete prioritized actions and a realistic timeframe).
  */
 export default function OptimizationPlanCard({ plan }: { plan: OptimizationPlan | null }) {
-  if (!plan) return null;
+  if (!plan) {
+    return (
+      <div id="optimization-plan" className="card p-4 sm:p-6 scroll-mt-20">
+        <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
+          <Rocket size={18} className="text-[var(--brand)]" /> Optimization Plan &amp; Projected Results
+        </h3>
+        <Explainer {...optimizationExplainer} />
+        <p className="text-sm text-[var(--ink-3)]">
+          No optimization plan in this audit — run a new audit to populate this.
+        </p>
+      </div>
+    );
+  }
 
   const delta = plan.projectedOverallScore - plan.currentOverallScore;
 
@@ -39,6 +60,8 @@ export default function OptimizationPlanCard({ plan }: { plan: OptimizationPlan 
           <div className="text-xs font-semibold text-[var(--brand-ink)] bg-[var(--brand-soft)] rounded-full px-2 py-1">+{delta}</div>
         </div>
       </div>
+
+      <Explainer {...optimizationExplainer} />
 
       <div className="flex items-center gap-2 text-xs text-[var(--ink-3)] mb-5">
         <Zap size={13} className="text-[var(--amber)]" /> Realistic timeframe to reach the projected score: <span className="font-semibold text-[var(--ink)]">{plan.projectedTimeframe}</span>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PenLine, Loader2, Copy, Check } from 'lucide-react';
+import Explainer from './Explainer';
 
 /** Per-brief "Generate draft" action (Gumshoe "Act → Content generation"). */
 function GenerateDraft({ brief }: { brief: Record<string, unknown> }) {
@@ -66,15 +67,27 @@ function GenerateDraft({ brief }: { brief: Record<string, unknown> }) {
 }
 
 export default function ContentBriefs({ briefs }: { briefs: Array<Record<string, unknown>> }) {
-  if (!briefs || briefs.length === 0) return null;
+  const list = briefs ?? [];
 
   return (
     <div id="content-generation" className="mt-8 scroll-mt-20">
       <h3 className="text-lg sm:text-xl font-bold text-[var(--ink)] mb-2">Content Briefs — Top Keyword Opportunities</h3>
+      <Explainer
+        what="AI-drafted content briefs targeting the keyword/topic gaps found in this audit."
+        actions={[
+          'Publish briefs targeting topics where the Persona heatmap shows low visibility.',
+          'Interlink new content with your top AI-crawled pages.',
+        ]}
+      />
       <p className="text-sm text-[var(--muted)] mb-6">Ready-to-brief content specs — or generate a publish-ready draft in one click.</p>
 
+      {list.length === 0 ? (
+        <p className="text-sm text-[var(--muted)]">
+          No content brief data in this audit — run a new audit to populate this.
+        </p>
+      ) : (
       <div className="space-y-6">
-        {briefs.map((brief, idx) => (
+        {list.map((brief, idx) => (
           <div key={idx} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 sm:p-6 relative overflow-hidden">
             
             {/* Header */}
@@ -122,6 +135,7 @@ export default function ContentBriefs({ briefs }: { briefs: Array<Record<string,
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

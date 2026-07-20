@@ -6,6 +6,15 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend,
 } from 'chart.js';
 import { TrendingUp } from 'lucide-react';
+import Explainer from './Explainer';
+
+const trendsExplainer = {
+  what: 'Your overall SEO health score across past audits of this URL — shows whether technical/content fixes are moving the needle.',
+  actions: [
+    'Re-audit after each batch of fixes to log progress.',
+    'A falling score after no changes usually means a competitor or platform shift — check Technical audit.',
+  ],
+};
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -33,6 +42,7 @@ export default function TrendsCard({ url }: { url: string }) {
         <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
           <TrendingUp size={18} className="text-[var(--brand)]" /> Trends
         </h3>
+        <Explainer {...trendsExplainer} />
         <p className="text-sm text-[var(--ink-3)]">
           Score history appears after this URL has been audited more than once. Add it to your watchlist for
           automatic weekly re-audits, and this chart fills in by itself.
@@ -53,6 +63,7 @@ export default function TrendsCard({ url }: { url: string }) {
       <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-4">
         <TrendingUp size={18} className="text-[var(--brand)]" /> Trends
       </h3>
+      <Explainer {...trendsExplainer} />
       <Line
         data={{
           labels,

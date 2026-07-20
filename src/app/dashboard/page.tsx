@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Gauge, Search, Sparkles } from 'lucide-react';
+import Explainer from './Explainer';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import StatCard from './StatCard';
@@ -320,6 +321,13 @@ function DashboardContent() {
           {/* Content Gap + Briefs */}
           {data.synthesis && (
             <section id="content" className="flex flex-col gap-5 scroll-mt-20">
+              <Explainer
+                what="Content plan generated from this audit's detected gaps: suggested posts with outlines, targeting topics where competitors or AI-cited sources out-cover you."
+                actions={[
+                  'Publish the suggested post first — it targets your single largest detected gap.',
+                  'Keep each brief one topic deep; AI engines cite focused pages over broad ones.',
+                ]}
+              />
               {data.synthesis.contentGapBrief && (
                 <div className="card p-4 sm:p-6">
                   <span className="bg-[var(--blue-soft)] text-[var(--blue)] text-xs px-3 py-1 rounded-full uppercase font-bold tracking-wide">Suggested Post</span>
@@ -359,6 +367,13 @@ function DashboardContent() {
             <h3 className="text-base font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
               <Zap size={18} className="text-[var(--blue)]" /> Technical &amp; Performance
             </h3>
+            <Explainer
+              what="Core technical health: page speed, HTTPS, robots.txt, sitemap, and crawl hygiene. These are ranking prerequisites — weakness here caps everything else."
+              actions={[
+                'Mobile speed under 60? Compress images and cut third-party scripts first — it is usually 80% of the problem.',
+                'Missing robots.txt or sitemap.xml are 10-minute fixes with outsized crawl benefits.',
+              ]}
+            />
             <div className="flex flex-col">
               <div className="flex justify-between items-center py-2.5 border-b border-[var(--border)]">
                 <span className="text-sm text-[var(--ink-2)]">Lighthouse Mobile Speed</span>
@@ -567,12 +582,21 @@ function DashboardContent() {
 
           {/* Keyword Opportunities */}
           {data.synthesis?.keywordOpportunities && (
-            <div id="keywords" className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mt-4 scroll-mt-20">
+            <div id="keywords" className="md:col-span-2 mt-4 scroll-mt-20">
+              <Explainer
+                what="Keyword opportunities ranked by intent (volume/difficulty are AI estimates until SERP data grounds them). Transactional intent converts; informational intent builds the topical authority AI engines cite."
+                actions={[
+                  'Build pages for transactional keywords you can win now; assign informational ones to the Content plan.',
+                  'Cross-check against the Persona heatmap — keywords serving a low-visibility persona compound both wins.',
+                ]}
+              />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
               <div className="md:col-span-1">
                  <KeywordIntentChart keywords={data.synthesis.keywordOpportunities} />
               </div>
               <div className="md:col-span-2">
                  <KeywordTable keywords={data.synthesis.keywordOpportunities} />
+              </div>
               </div>
             </div>
           )}
@@ -580,7 +604,14 @@ function DashboardContent() {
           {/* Competitor Gap Analysis */}
           {competitors.length > 0 && (
             <div id="competitors" className="md:col-span-2 scroll-mt-20">
-               <CompetitorGapTable targetDomain={data.domain} targetData={data} competitors={competitors} />
+              <Explainer
+                what="Side-by-side comparison against the competitors crawled in this audit: content depth, structure, links, and schema. Gaps here explain ranking and AI-recommendation differences."
+                actions={[
+                  'Close the largest content gap first — thin pages rarely get cited by AI engines or ranked by Google.',
+                  'Match competitor schema types (reviews, products, FAQ) before trying to out-write them.',
+                ]}
+              />
+              <CompetitorGapTable targetDomain={data.domain} targetData={data} competitors={competitors} />
             </div>
           )}
 
@@ -615,6 +646,14 @@ function DashboardContent() {
 
           {/* Action Plan Board & Content Calendar */}
           <section id="reports" className="flex flex-col gap-5 scroll-mt-20">
+            <Explainer
+              what="Everything actionable from this audit in one place: the prioritized optimization plan, deployable AI-ready artifacts, and the content calendar."
+              actions={[
+                'Work top-down: quick wins → high-impact plan items → calendar content.',
+                'Export the branded PDF report from the Reports page to share with stakeholders or clients.',
+              ]}
+              defaultOpen
+            />
             <OptimizationPlanCard plan={data.optimizationPlan ?? null} />
             <ActivationCard auditPayload={data} />
             {data.synthesis?.contentCalendar && <ContentCalendar calendar={data.synthesis.contentCalendar} />}

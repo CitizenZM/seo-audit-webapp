@@ -6,6 +6,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend,
 } from 'chart.js';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import Explainer from './Explainer';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -51,12 +52,12 @@ export default function VisibilityTrendCard({ domain }: { domain: string }) {
     return () => { cancelled = true; };
   }, [domain]);
 
-  if (failed || !trend || trend.points.length < 2) return null;
+  const hasTrend = !failed && !!trend && trend.points.length >= 2;
 
-  const meta = momentumMeta[trend.momentum] ?? momentumMeta.flat;
+  const meta = hasTrend ? (momentumMeta[trend!.momentum] ?? momentumMeta.flat) : momentumMeta.flat;
   const MomentumIcon = meta.Icon;
 
-  const labels = trend.points.map((p) => new Date(p.capturedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+  const labels = hasTrend ? trend!.points.map((p) => new Date(p.capturedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) : [];
 
   return (
     <div id="visibility-trend" className="card p-4 sm:p-6 scroll-mt-20">
@@ -64,16 +65,31 @@ export default function VisibilityTrendCard({ domain }: { domain: string }) {
         <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
           <TrendingUp size={18} className="text-[var(--brand)]" /> AI Visibility Trend
         </h3>
-        <span className="flex items-center gap-1.5 text-sm font-semibold shrink-0" style={{ color: meta.color }}>
-          <MomentumIcon size={16} /> {trend.deltaPct > 0 ? '+' : ''}{trend.deltaPct}%
-        </span>
+        {hasTrend && (
+          <span className="flex items-center gap-1.5 text-sm font-semibold shrink-0" style={{ color: meta.color }}>
+            <MomentumIcon size={16} /> {trend!.deltaPct > 0 ? '+' : ''}{trend!.deltaPct}%
+          </span>
+        )}
       </div>
+      <Explainer
+        what="Your AI-visibility % over time with momentum and competitor movement — the KPI that shows whether GEO work is winning share of AI answers."
+        actions={[
+          'Audit weekly (or enable the scheduled re-audit) to build a reliable trend.',
+          'Watch competitor movers: a rising competitor is capturing prompts you\'re losing.',
+        ]}
+      />
+      {!hasTrend ? (
+        <p className="text-sm text-[var(--ink-3)]">
+          Trend appears after 2+ audits of the same domain.
+        </p>
+      ) : (
+      <>
       <Line
         data={{
           labels,
           datasets: [{
             label: 'Visibility %',
-            data: trend.points.map((p) => p.visibilityPct),
+            data: trend!.points.map((p) => p.visibilityPct),
             borderColor: '#16a34a',
             backgroundColor: '#16a34a',
             spanGaps: true,
@@ -90,11 +106,11 @@ export default function VisibilityTrendCard({ domain }: { domain: string }) {
           plugins: { legend: { display: false } },
         }}
       />
-      {trend.competitorMovers?.length > 0 && (
+      {trend!.competitorMovers?.length > 0 && (
         <div className="mt-4 pt-4 border-t border-[var(--border)]">
           <div className="text-xs uppercase tracking-wider font-semibold text-[var(--ink-3)] mb-2">Competitor Movers</div>
           <div className="flex flex-wrap gap-2">
-            {trend.competitorMovers.map((m, i) => (
+            {trend!.competitorMovers.map((m, i) => (
               <span key={i} className="text-xs px-2.5 py-1 rounded-full bg-[var(--surface-2)] border border-[var(--border)] text-[var(--ink-2)]">
                 <span className="font-semibold text-[var(--ink)]">{m.brand}</span>{' '}
                 <span style={{ color: m.delta >= 0 ? 'var(--pass)' : 'var(--fail)' }}>{m.delta > 0 ? '+' : ''}{m.delta}%</span>
@@ -102,6 +118,8 @@ export default function VisibilityTrendCard({ domain }: { domain: string }) {
             ))}
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

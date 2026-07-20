@@ -1,17 +1,18 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Zap, Search, Users, FileText, BarChart3, Settings, HelpCircle,
   Sparkles, Eye, Trophy, Quote, PenLine, UserRound, TrendingUp, Rocket, X,
+  Grid3x3, Heart, ShieldCheck, Link2, LineChart, ShoppingCart, Bot, FileCode2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /**
- * Gumshoe/Profound-style grouped navigation:
- *   Dashboard → the headline visibility audit
- *   Monitor   → what AI/search says about you (read)
- *   Act       → what to change (do)
- *   Configure → setup (personas coming later)
+ * Grouped navigation, ordered to MATCH the actual render order of sections in
+ * dashboard/page.tsx — every id here must exist in the DOM (page.tsx renders
+ * hidden fallback anchors for any card that returned null, so clicks always
+ * land on the right spot even when a section has no data).
  */
 const GROUPS: { label: string | null; items: { id: string; label: string; icon: LucideIcon; soon?: boolean }[] }[] = [
   {
@@ -22,32 +23,81 @@ const GROUPS: { label: string | null; items: { id: string; label: string; icon: 
     ],
   },
   {
-    label: 'Monitor',
+    label: 'AI visibility',
     items: [
       { id: 'leaderboard', label: 'Competitive leaderboard', icon: Trophy },
-      { id: 'geo', label: 'AI crawlers & GEO', icon: Sparkles },
+      { id: 'persona-heatmap', label: 'Persona heatmap', icon: Grid3x3 },
+      { id: 'sentiment-drivers', label: 'Sentiment drivers', icon: Heart },
+      { id: 'claims-accuracy', label: 'Claims accuracy', icon: ShieldCheck },
       { id: 'citations', label: 'Citation audit', icon: Quote },
-      { id: 'trends', label: 'Trends', icon: TrendingUp },
+      { id: 'citation-gap', label: 'Citation gap', icon: Link2 },
+    ],
+  },
+  {
+    label: 'Tracking',
+    items: [
+      { id: 'trends', label: 'Score trends', icon: TrendingUp },
+      { id: 'visibility-trend', label: 'Visibility trend', icon: LineChart },
+      { id: 'crawler-analytics', label: 'Crawler analytics', icon: Bot },
+    ],
+  },
+  {
+    label: 'GEO',
+    items: [
+      { id: 'geo', label: 'AI crawlers & GEO', icon: Sparkles },
+      { id: 'commerce-readiness', label: 'Commerce readiness', icon: ShoppingCart },
+    ],
+  },
+  {
+    label: 'SEO',
+    items: [
+      { id: 'technical', label: 'Technical audit', icon: Zap },
       { id: 'keywords', label: 'Keywords', icon: Search },
+      { id: 'competitors', label: 'Competitor gap', icon: Users },
+      { id: 'content', label: 'Content plan', icon: FileText },
     ],
   },
   {
     label: 'Act',
     items: [
-      { id: 'technical', label: 'Technical audit', icon: Zap },
-      { id: 'competitors', label: 'Competitor gap', icon: Users },
-      { id: 'content', label: 'Content plan', icon: FileText },
       { id: 'reports', label: 'Optimization plan', icon: Rocket },
-    ],
-  },
-  {
-    label: 'Configure',
-    items: [
-      { id: 'personas', label: 'Personas', icon: UserRound },
+      { id: 'activation', label: 'AI-ready artifacts', icon: FileCode2 },
       { id: 'content-generation', label: 'Content generation', icon: PenLine },
+      { id: 'personas', label: 'Personas', icon: UserRound, soon: true },
     ],
   },
 ];
+
+const ALL_IDS = GROUPS.flatMap((g) => g.items.filter((i) => !i.soon).map((i) => i.id));
+
+/**
+ * Scrollspy: highlight the section nearest the top of the viewport. The old
+ * hardcoded `active="overview"` never updated, which made every click look
+ * like it landed on the wrong section.
+ */
+function useScrollSpy(initial: string): string {
+  const [active, setActive] = useState(initial);
+  useEffect(() => {
+    const visible = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) visible.set(e.target.id, e.boundingClientRect.top);
+          else visible.delete(e.target.id);
+        }
+        if (visible.size > 0) {
+          const top = [...visible.entries()].sort((a, b) => a[1] - b[1])[0][0];
+          setActive(top);
+        }
+      },
+      { rootMargin: '-64px 0px -55% 0px', threshold: 0 },
+    );
+    const els = ALL_IDS.map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el);
+    els.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+  return active;
+}
 
 export default function Sidebar({
   active = 'overview',
@@ -60,6 +110,7 @@ export default function Sidebar({
   open?: boolean;
   onClose?: () => void;
 }) {
+  const spied = useScrollSpy(active);
   const navContent = (
     <>
       {/* Grouped nav */}
@@ -70,7 +121,7 @@ export default function Sidebar({
               <div className="px-3 pb-1.5 text-[10px] uppercase tracking-widest font-bold text-[var(--ink-3)]">{group.label}</div>
             )}
             {group.items.map(({ id, label, icon: Icon, soon }) => {
-              const isActive = id === active;
+              const isActive = id === spied;
               if (soon) {
                 return (
                   <span key={id} className="flex items-center gap-3 px-3 py-2.5 lg:py-2 rounded-lg text-sm font-medium text-[var(--ink-3)] cursor-default select-none">

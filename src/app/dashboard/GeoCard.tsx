@@ -1,6 +1,7 @@
 'use client';
 
 import { Bot, CheckCircle2, XCircle, Sparkles, FileText, Clock, HelpCircle, Code } from 'lucide-react';
+import Explainer from './Explainer';
 
 interface BotAccess { name: string; engine: string; allowed: boolean }
 interface Geo {
@@ -24,8 +25,29 @@ function scoreTone(score: number) {
   return { color: 'var(--red)', soft: 'var(--red-soft)' };
 }
 
-export default function GeoCard({ geo }: { geo: Geo }) {
-  if (!geo) return null;
+const geoExplainer = {
+  what: 'Technical readiness for AI engines: which AI crawlers can access your site, llms.txt, structured data, and content accessible without JavaScript.',
+  actions: [
+    'Unblock any AI crawler you want visibility on (robots.txt).',
+    'Download the ready-made llms.txt from AI-ready artifacts below and deploy it.',
+    'Fix no-JS content gaps — most AI crawlers don\'t execute JavaScript.',
+  ],
+};
+
+export default function GeoCard({ geo }: { geo: Geo | null }) {
+  if (!geo) {
+    return (
+      <div id="geo" className="card p-4 sm:p-6 scroll-mt-20">
+        <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
+          <Sparkles size={18} className="text-[var(--brand)]" /> Generative Engine Optimization (GEO)
+        </h3>
+        <Explainer {...geoExplainer} />
+        <p className="text-sm text-[var(--ink-3)]">
+          No GEO data in this audit — run a new audit to populate this.
+        </p>
+      </div>
+    );
+  }
   const tone = scoreTone(geo.score);
 
   const checks = [
@@ -62,6 +84,8 @@ export default function GeoCard({ geo }: { geo: Geo }) {
           </div>
         </div>
       </div>
+
+      <Explainer {...geoExplainer} />
 
       {/* AI crawler access */}
       <div className="mb-5">

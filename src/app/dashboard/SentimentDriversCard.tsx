@@ -1,6 +1,7 @@
 'use client';
 
 import { Smile, Meh, Frown } from 'lucide-react';
+import Explainer from './Explainer';
 
 interface Driver { attribute: string; sentiment: 'positive' | 'neutral' | 'negative'; evidence: string }
 
@@ -15,18 +16,30 @@ const sentimentStyle: Record<Driver['sentiment'], { label: string; color: string
  * about the brand, each backed by a quoted evidence line.
  */
 export default function SentimentDriversCard({ drivers }: { drivers?: Driver[] | null }) {
-  if (!drivers || drivers.length === 0) return null;
+  const list = drivers ?? [];
 
   return (
     <div id="sentiment-drivers" className="card p-4 sm:p-6 scroll-mt-20">
       <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
         <Smile size={18} className="text-[var(--brand)]" /> Perception Drivers
       </h3>
+      <Explainer
+        what="The specific attributes (price, quality, shipping…) driving how AI assistants describe your brand, with evidence quotes — not just an overall positive/negative score."
+        actions={[
+          'Fix negative drivers at the source: update product pages/policies, then re-audit.',
+          'Amplify positive drivers in your homepage copy and schema so AI answers repeat them.',
+        ]}
+      />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         The specific attributes shaping how AI models describe this brand.
       </p>
+      {list.length === 0 ? (
+        <p className="text-sm text-[var(--ink-3)]">
+          No sentiment driver data in this audit — run a new audit to populate this.
+        </p>
+      ) : (
       <div className="flex flex-col gap-2">
-        {drivers.map((d, i) => {
+        {list.map((d, i) => {
           const s = sentimentStyle[d.sentiment] ?? sentimentStyle.neutral;
           const Icon = s.Icon;
           return (
@@ -45,6 +58,7 @@ export default function SentimentDriversCard({ drivers }: { drivers?: Driver[] |
           );
         })}
       </div>
+      )}
     </div>
   );
 }

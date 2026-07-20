@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Bot, Server } from 'lucide-react';
+import Explainer from './Explainer';
 
 /**
  * Crawler Analytics — aggregate AI/search bot hit counts from a configured
@@ -28,13 +29,11 @@ export default function CrawlerAnalyticsCard() {
     return () => { cancelled = true; };
   }, []);
 
-  if (loading) return null;
-
   const hitsPerBot: Record<string, number> | undefined = stats?.hitsPerBot;
   const hitsPerEngine: Record<string, number> | undefined = stats?.hitsPerEngine;
   const topPaths: { path: string; hits: number }[] | undefined = stats?.topPaths;
 
-  const hasData = !errored && stats && (
+  const hasData = !loading && !errored && stats && (
     (hitsPerBot && Object.keys(hitsPerBot).length > 0) ||
     (hitsPerEngine && Object.keys(hitsPerEngine).length > 0) ||
     (topPaths && topPaths.length > 0)
@@ -45,6 +44,13 @@ export default function CrawlerAnalyticsCard() {
       <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
         <Bot size={18} className="text-[var(--blue)]" /> Crawler Analytics
       </h3>
+      <Explainer
+        what="Real AI-bot traffic on your site from server logs: which engines (GPTBot, ClaudeBot, PerplexityBot…) crawl you, how often, and which pages they read."
+        actions={[
+          'No hits from an engine you care about? Check it isn\'t blocked in robots.txt.',
+          'Heavily-crawled pages are what AI knows you for — keep them accurate and rich.',
+        ]}
+      />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         Real AI &amp; search bot traffic to this site, from your Vercel Log Drain.
       </p>

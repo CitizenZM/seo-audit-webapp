@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Grid3x3, ChevronDown, ChevronUp } from 'lucide-react';
+import Explainer from './Explainer';
 
 interface PersonaDef {
   name: string;
@@ -36,8 +37,7 @@ export default function PersonaHeatmap({
 
   const hasHeatmap = !!heatmap && heatmap.personas?.length > 0 && heatmap.topics?.length > 0 && heatmap.cells?.length > 0;
   const richDefs = (personaDefs ?? []).filter((p) => p.role || p.painPoints?.length || p.purchaseCriteria?.length);
-
-  if (!hasHeatmap && richDefs.length === 0) return null;
+  const hasData = hasHeatmap || richDefs.length > 0;
 
   const cellMap = new Map<string, HeatmapCell>();
   if (hasHeatmap) {
@@ -49,9 +49,22 @@ export default function PersonaHeatmap({
       <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
         <Grid3x3 size={18} className="text-[var(--brand)]" /> Persona &times; Topic Visibility
       </h3>
+      <Explainer
+        what="Visibility broken down by buyer persona × topic. Each cell shows how often AI assistants recommend you to that persona asking about that topic — darker = more visible."
+        actions={[
+          'Target the lightest rows: create content answering that persona\'s exact questions.',
+          'Expand a persona chip to see their pain points and purchase criteria — mirror that language on your landing pages.',
+        ]}
+      />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         Where the brand shows up (or doesn&apos;t) across buyer personas and question topics in AI answers.
       </p>
+
+      {!hasData && (
+        <p className="text-sm text-[var(--ink-3)]">
+          No persona probe data in this audit — run a new audit to populate this.
+        </p>
+      )}
 
       {hasHeatmap && (
         <div className="overflow-x-auto mb-2">
