@@ -34,7 +34,12 @@ export const AI_BOTS: { name: string; engine: string }[] = [
   { name: 'Applebot-Extended', engine: 'Apple Intelligence' },
   { name: 'CCBot', engine: 'Common Crawl (feeds many LLMs)' },
   { name: 'Bytespider', engine: 'TikTok / Doubao' },
+  { name: 'Amazonbot', engine: 'Amazon (Alexa / shopping agents)' },
+  { name: 'Google-CloudVertexBot', engine: 'Google Vertex AI agents' },
 ];
+
+/** Bots that specifically matter for agentic-commerce / AI-shopping-agent access. */
+const COMMERCE_BOTS = ['GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'Amazonbot', 'Google-CloudVertexBot', 'PerplexityBot'];
 
 export interface BotAccess {
   name: string;
@@ -55,6 +60,175 @@ export interface GeoResult {
   noJsContentWords: number;
   noJsContentOk: boolean;
   recommendations: string[];
+  commerce?: CommerceReadiness;
+}
+
+/**
+ * Agentic-commerce readiness — can an AI shopping agent (ChatGPT Shopping,
+ * Amazon's Rufus/agents, Perplexity Shopping, Gemini agents) actually parse
+ * this page as a product and complete/assist a purchase decision?
+ */
+export interface CommerceCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+  impact: 'high' | 'medium' | 'low';
+}
+
+export interface CommerceReadiness {
+  score: number;
+  checks: CommerceCheck[];
+}
+
+export interface CommerceReadinessInput {
+  html: string;
+  schemaTypes: string[];
+  robotsTxt?: string;
+  origin: string;
+}
+
+/** Does any JSON-LD node of the given @type carry a non-empty value for `key`? */
+function schemaHasField($: cheerio.CheerioAPI, types: string[], key: string): boolean {
+  let found = false;
+  $('script[type="application/ld+json"]').each((_, el) => {
+    if (found) return;
+    try {
+      const raw = JSON.parse($(el).text());
+      const nodes = Array.isArray(raw) ? raw : (raw as Record<string, unknown>)['@graph'] ?? [raw];
+      for (const node of ([] as unknown[]).concat(nodes as never)) {
+        const n = node as Record<string, unknown>;
+        const nodeType = n?.['@type'];
+        const typeMatches = Array.isArray(nodeType)
+          ? nodeType.some((t) => types.includes(String(t)))
+          : typeof nodeType === 'string' && types.includes(nodeType);
+        if (!typeMatches) continue;
+        // Direct field, or nested under offers/aggregateRating/review.
+        if (n[key] !== undefined && n[key] !== null && n[key] !== '') { found = true; break; }
+        const offers = n['offers'];
+        const offerNodes = Array.isArray(offers) ? offers : offers ? [offers] : [];
+        for (const o of offerNodes) {
+          const ov = (o as Record<string, unknown>)?.[key];
+          if (ov !== undefined && ov !== null && ov !== '') { found = true; break; }
+        }
+      }
+    } catch { /* ignore */ }
+  });
+  return found;
+}
+
+/** Pure scoring of agentic-commerce parseability. No network calls — reuses data the caller already has. */
+export function analyzeCommerceReadiness({ html, schemaTypes, robotsTxt, origin }: CommerceReadinessInput): CommerceReadiness {
+  const $ = cheerio.load(html);
+
+  const hasProductSchema = schemaTypes.includes('Product');
+  const hasOfferSchema = schemaTypes.includes('Offer') || schemaHasField($, ['Product'], 'offers');
+  const hasAggregateRating = schemaTypes.includes('AggregateRating') || schemaHasField($, ['Product'], 'aggregateRating');
+  const hasReview = schemaTypes.includes('Review') || schemaHasField($, ['Product'], 'review');
+  const hasPrice = schemaHasField($, ['Product', 'Offer'], 'price');
+  const hasAvailability = schemaHasField($, ['Product', 'Offer'], 'availability');
+
+  // Agent-friction signals: things that block a JS-less/no-interaction crawler.
+  const bodyHtml = $('body').html() || '';
+  const hasCaptchaMarker = /(recaptcha|hcaptcha|cf-turnstile|captcha)/i.test(bodyHtml)
+    || $('meta[name="captcha"]').length > 0;
+  const noscriptTags = $('noscript');
+  let noscriptOnlyContent = false;
+  if (noscriptTags.length > 0) {
+    const bodyText = $('body').clone().find('script, style, noscript').remove().end().text().replace(/\s+/g, ' ').trim();
+    noscriptOnlyContent = bodyText.length < 100; // main body nearly empty outside <noscript>
+  }
+  const hasLoginWall = /(please log ?in|sign in to (view|continue|see)|members? only|create an account to)/i.test(
+    $('body').text(),
+  );
+
+  const checks: CommerceCheck[] = [
+    {
+      id: 'product-schema',
+      label: 'Product schema present',
+      passed: hasProductSchema,
+      detail: hasProductSchema ? 'Product JSON-LD found.' : 'No Product @type in structured data — agents cannot identify this as a product page.',
+      impact: 'high',
+    },
+    {
+      id: 'offer-schema',
+      label: 'Offer schema present',
+      passed: hasOfferSchema,
+      detail: hasOfferSchema ? 'Offer data found.' : 'No Offer schema — price/availability not machine-readable.',
+      impact: 'high',
+    },
+    {
+      id: 'price-visible',
+      label: 'Price in structured data',
+      passed: hasPrice,
+      detail: hasPrice ? 'Price present in schema.' : 'No price field found in Product/Offer schema.',
+      impact: 'high',
+    },
+    {
+      id: 'availability-markup',
+      label: 'Availability markup present',
+      passed: hasAvailability,
+      detail: hasAvailability ? 'Availability field present.' : 'No availability (InStock/OutOfStock) markup — agents cannot confirm purchasability.',
+      impact: 'medium',
+    },
+    {
+      id: 'aggregate-rating',
+      label: 'AggregateRating schema present',
+      passed: hasAggregateRating,
+      detail: hasAggregateRating ? 'AggregateRating found.' : 'No AggregateRating schema — agents cannot cite a trust signal.',
+      impact: 'medium',
+    },
+    {
+      id: 'review-schema',
+      label: 'Review schema present',
+      passed: hasReview,
+      detail: hasReview ? 'Review data found.' : 'No Review schema present.',
+      impact: 'low',
+    },
+    {
+      id: 'no-captcha-friction',
+      label: 'No CAPTCHA/bot-wall markers detected',
+      passed: !hasCaptchaMarker,
+      detail: hasCaptchaMarker ? 'CAPTCHA/bot-check markers detected — likely to block agent crawling.' : 'No CAPTCHA markers detected in page HTML.',
+      impact: 'high',
+    },
+    {
+      id: 'no-noscript-only-content',
+      label: 'Content available without JavaScript',
+      passed: !noscriptOnlyContent,
+      detail: noscriptOnlyContent ? 'Page body is nearly empty outside <noscript> — most shopping agents do not execute JS.' : 'Core content is present without requiring JS execution.',
+      impact: 'high',
+    },
+    {
+      id: 'no-login-wall',
+      label: 'No login-wall pattern detected',
+      passed: !hasLoginWall,
+      detail: hasLoginWall ? 'Login/sign-in-required language detected — may block anonymous agent access.' : 'No login-wall language detected.',
+      impact: 'medium',
+    },
+  ];
+
+  if (robotsTxt !== undefined) {
+    const blockedCommerceBots = COMMERCE_BOTS.filter((b) => !isBotAllowed(robotsTxt, b));
+    checks.push({
+      id: 'commerce-bots-allowed',
+      label: 'Shopping-relevant AI bots allowed in robots.txt',
+      passed: blockedCommerceBots.length === 0,
+      detail: blockedCommerceBots.length
+        ? `Blocking shopping-relevant bots: ${blockedCommerceBots.join(', ')}.`
+        : 'All shopping-relevant AI bots (GPTBot, Amazonbot, Google-CloudVertexBot, etc.) are allowed.',
+      impact: 'high',
+    });
+  }
+
+  void origin; // reserved for future origin-relative checks (e.g. checkout URL shape)
+
+  const weight = (impact: CommerceCheck['impact']) => (impact === 'high' ? 3 : impact === 'medium' ? 2 : 1);
+  const totalWeight = checks.reduce((s, c) => s + weight(c.impact), 0);
+  const earnedWeight = checks.reduce((s, c) => s + (c.passed ? weight(c.impact) : 0), 0);
+  const score = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
+
+  return { score, checks };
 }
 
 /**
@@ -273,6 +447,9 @@ export async function analyzeGeo({ origin, html, schemaTypes }: GeoInput): Promi
     recommendations.push('Publish an /llms.txt (llmstxt.org) pointing engines to your most important pages.');
   }
 
+  // Reuse the robots.txt body already fetched above — no extra network call.
+  const commerce = analyzeCommerceReadiness({ html, schemaTypes, robotsTxt, origin });
+
   return {
     score,
     botAccess,
@@ -286,5 +463,6 @@ export async function analyzeGeo({ origin, html, schemaTypes }: GeoInput): Promi
     noJsContentWords,
     noJsContentOk,
     recommendations,
+    commerce,
   };
 }

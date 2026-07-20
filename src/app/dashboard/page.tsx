@@ -22,6 +22,14 @@ import ContentCalendar from './ContentCalendar';
 import KeywordIntentChart from './KeywordIntentChart';
 import KeywordTable from './KeywordTable';
 import CompetitorGapTable from './CompetitorGapTable';
+import PersonaHeatmap from './PersonaHeatmap';
+import CitationGapCard from './CitationGapCard';
+import ClaimsAccuracyCard from './ClaimsAccuracyCard';
+import SentimentDriversCard from './SentimentDriversCard';
+import CommerceReadinessCard from './CommerceReadinessCard';
+import VisibilityTrendCard from './VisibilityTrendCard';
+import CrawlerAnalyticsCard from './CrawlerAnalyticsCard';
+import ActivationCard from './ActivationCard';
 
 /** (B6) new URL() throws on a malformed value — never let a bad ?url= crash the page. */
 function safeHostname(url: string): string {
@@ -253,16 +261,37 @@ function DashboardContent() {
           {/* Brand Visibility — Gumshoe-style visibility audit (headline section) */}
           <VisibilityCard visibility={data.visibility ?? null} domain={data.domain} />
 
+          {/* Persona x Topic heatmap + persona detail (role/pain points/purchase criteria) */}
+          <PersonaHeatmap heatmap={data.visibilityExtras?.heatmap ?? null} personaDefs={data.visibility?.personaDefs ?? null} />
+
+          {/* Perception drivers — sentiment-tagged attributes with evidence */}
+          <SentimentDriversCard drivers={data.visibility?.perception?.drivers ?? null} />
+
+          {/* Claims accuracy — fact-check of what AI models say about the brand */}
+          <ClaimsAccuracyCard claims={data.visibilityExtras?.claims ?? null} />
+
           {/* Citation audit — which domains AI models cite in this category */}
           {data.visibility?.citations?.length > 0 && (
             <CitationsCard citations={data.visibility.citations} domain={data.domain} />
           )}
 
+          {/* Citation gap — domains AI engines cite where the brand is absent (outreach targets) */}
+          <CitationGapCard citationGap={data.visibilityExtras?.citationGap ?? null} />
+
           {/* Trends — score history for this URL */}
           <TrendsCard url={data.url} />
 
+          {/* AI-answer visibility % trend + competitor movers */}
+          <VisibilityTrendCard domain={data.domain} />
+
           {/* GEO — AI crawler access & readiness */}
           {data.geo && <GeoCard geo={data.geo} />}
+
+          {/* Commerce readiness — AI shopping-agent checklist */}
+          <CommerceReadinessCard commerce={data.geo?.commerce ?? null} />
+
+          {/* Crawler analytics — real AI/search bot hits via Vercel Log Drain */}
+          <CrawlerAnalyticsCard />
 
           {/* Executive Summary from AI Synthesis */}
           {data.synthesis && (
@@ -587,6 +616,7 @@ function DashboardContent() {
           {/* Action Plan Board & Content Calendar */}
           <section id="reports" className="flex flex-col gap-5 scroll-mt-20">
             <OptimizationPlanCard plan={data.optimizationPlan ?? null} />
+            <ActivationCard auditPayload={data} />
             {data.synthesis?.contentCalendar && <ContentCalendar calendar={data.synthesis.contentCalendar} />}
             <ActionPlanBoard data={data} />
             <EmailReport url={data.url} domain={data.domain} score={data.overallScore} previousScore={priorScore} />

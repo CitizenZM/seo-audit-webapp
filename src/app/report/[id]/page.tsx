@@ -18,6 +18,17 @@ import KeywordIntentChart from '../../dashboard/KeywordIntentChart';
 import KeywordTable from '../../dashboard/KeywordTable';
 import CompetitorGapTable from '../../dashboard/CompetitorGapTable';
 import ActionProposalCard from './ActionProposalCard';
+import { sanitizeBranding, BRANDING_LOCALSTORAGE_KEY, type Branding } from '@/lib/branding';
+
+function readLocalBranding(): Branding {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(BRANDING_LOCALSTORAGE_KEY);
+    return raw ? sanitizeBranding(JSON.parse(raw)) : {};
+  } catch {
+    return {};
+  }
+}
 
 /**
  * The standalone, exportable Audit Report (distinct from the live /dashboard
@@ -36,6 +47,14 @@ export default function ReportPage() {
   const [meta, setMeta] = useState<{ url: string; domain: string; createdAt: string } | null>(null);
   const [status, setStatus] = useState<'loading' | 'pending' | 'error' | 'ready'>('loading');
   const [error, setError] = useState('');
+  const [branding, setBranding] = useState<Branding>({});
+
+  useEffect(() => {
+    setBranding(readLocalBranding());
+    const onUpdate = (e: Event) => setBranding((e as CustomEvent<Branding>).detail ?? readLocalBranding());
+    window.addEventListener('agency-branding-updated', onUpdate);
+    return () => window.removeEventListener('agency-branding-updated', onUpdate);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -106,17 +125,25 @@ export default function ReportPage() {
   const totalLinks = (data.links?.internalCount ?? 0) + (data.links?.externalCount ?? 0);
 
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
+    <div
+      className="min-h-screen bg-[var(--bg)]"
+      style={branding.accentColor ? ({ '--brand': branding.accentColor, '--brand-ink': branding.accentColor } as React.CSSProperties) : undefined}
+    >
       <ReportHeader domain={meta?.domain ?? data.domain} url={meta?.url ?? data.url} generatedAt={meta?.createdAt ?? new Date().toISOString()} />
 
       <main className="max-w-[1000px] mx-auto p-4 sm:p-6 flex flex-col gap-4 sm:gap-5">
         {/* Print-only cover header */}
         <div className="print-header">
-          <div className="print-brand">SEO &amp; GEO Audit Report</div>
+          {branding.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={branding.logoUrl} alt={branding.agencyName || 'Agency logo'} className="print-logo" />
+          )}
+          <div className="print-brand">{branding.agencyName ? `${branding.agencyName} — SEO & GEO Audit Report` : 'SEO & GEO Audit Report'}</div>
           <div className="print-url">{data.url}</div>
           <div className="print-meta">
             Overall SEO {data.overallScore}/100 · AI Visibility (GEO) {data.geoScore ?? 'N/A'}/100 · Generated {meta?.createdAt ? new Date(meta.createdAt).toLocaleDateString() : ''}
           </div>
+          {branding.contactEmail && <div className="print-meta">Contact: {branding.contactEmail}</div>}
         </div>
 
         {/* KPI row */}
@@ -175,6 +202,9 @@ export default function ReportPage() {
         <ActionPlanBoard data={data} />
 
         <p className="no-print text-center text-xs text-[var(--ink-3)] py-6">End of report · <a href={`/dashboard?url=${encodeURIComponent(data.url)}`} className="text-[var(--brand-ink)] hover:underline">Re-run this audit</a></p>
+        {!branding.hidePoweredBy && (
+          <p className="text-center text-[10px] text-[var(--ink-3)] pb-6 -mt-3">Powered by SEO &amp; GEO Audit</p>
+        )}
       </main>
     </div>
   );

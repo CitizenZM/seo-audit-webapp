@@ -5,7 +5,10 @@ import { fetchSerp } from '@/lib/serp';
 import { assertSafeUrl } from '@/lib/urlSafety';
 import { computeScore } from '@/lib/score';
 import { analyzeGeo } from '@/lib/geo';
-import { analyzeVisibility } from '@/lib/visibility';
+import { analyzeVisibility, personaTopicHeatmap } from '@/lib/visibility';
+import { analyzeCitationGap } from '@/lib/citationGap';
+import { checkClaimsAccuracy } from '@/lib/claimsAccuracy';
+import { saveVisibilitySnapshot } from '@/lib/trends';
 import { generateOptimizationPlan } from '@/lib/optimizationPlan';
 
 export type Stage = 'crawl' | 'competitors' | 'speed' | 'ai' | 'serp' | 'plan' | 'done';
@@ -503,6 +506,59 @@ export async function runAudit(
     synthesis: synthesis ? { topCategoryScores: synthesis.topCategoryScores } : null,
   });
 
+  // Visibility-derived intelligence: heatmap is pure (free); citation gap and
+  // claims accuracy each make one AI call; snapshot persistence is a no-op
+  // without Supabase. All degrade to null/undefined rather than failing the run.
+  const visibilityExtras = visibility
+    ? await (async () => {
+        const heatmap = personaTopicHeatmap(visibility);
+        const [citationGap, claims] = await Promise.all([
+          analyzeCitationGap({
+            citations: visibility.prompts,
+            targetDomain: mainAnalysis.domain,
+            serpResults: serp ? [serp] : [],
+          }).catch((e) => {
+            console.warn('Citation gap skipped:', e instanceof Error ? e.message : e);
+            return null;
+          }),
+          visibility.mentionedAnswers?.length
+            ? checkClaimsAccuracy({
+                probeAnswers: visibility.mentionedAnswers,
+                brand: visibility.targetBrand,
+                siteFacts: {
+                  title: mainAnalysis.onPage.title,
+                  description: mainAnalysis.onPage.metaDescription || undefined,
+                  wordCountHint: mainAnalysis.onPage.wordCount,
+                },
+              }).catch((e) => {
+                console.warn('Claims accuracy skipped:', e instanceof Error ? e.message : e);
+                return null;
+              })
+            : Promise.resolve(null),
+        ]);
+        return { heatmap, citationGap, claims };
+      })()
+    : null;
+  // Raw answers were only needed for the claims stage — drop before persisting.
+  if (visibility) delete visibility.mentionedAnswers;
+
+  // Trend snapshot (graceful no-op without SUPABASE_SERVICE_ROLE_KEY).
+  if (visibility) {
+    await saveVisibilitySnapshot({
+      domain: mainAnalysis.domain,
+      visibility: {
+        visibilityPct: visibility.visibilityPct,
+        totalPrompts: visibility.totalPrompts,
+        leaderboard: visibility.leaderboard,
+        models: visibility.models,
+        citations: visibility.citations,
+      },
+    }).catch((e) => {
+      console.warn('Visibility snapshot skipped:', e instanceof Error ? e.message : e);
+      return false;
+    });
+  }
+
   // Optimization Plan: needs the FINAL scores as input, so it can't run in
   // the earlier parallel phase — this is a deliberate extra AI call at the
   // end of the pipeline, not an oversight.
@@ -555,6 +611,7 @@ export async function runAudit(
       serp,
       geo,
       visibility,
+      visibilityExtras,
       optimizationPlan,
       overallScore: scoreBreakdown.overall,
       geoScore: geo?.score ?? null,

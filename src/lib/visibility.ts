@@ -1,4 +1,5 @@
-import { activeProvider, aiText, extractJson, cliAvailable } from '@/lib/ai';
+import OpenAI from 'openai';
+import { activeProvider, aiText, extractJson, cliAvailable, OPENAI_MODEL } from '@/lib/ai';
 
 /**
  * Brand Visibility engine v2 — Gumshoe/Profound-style AI answer analysis.
@@ -7,15 +8,20 @@ import { activeProvider, aiText, extractJson, cliAvailable } from '@/lib/ai';
  *  1. Generate 3 buyer personas for the site's category (1 AI call).
  *  2. Build a prompt set: per-persona buyer questions + generic category
  *     questions, each tagged with a topic bucket.
- *  3. Probe every prompt against each configured model (OpenAI always;
- *     Claude too when ANTHROPIC_API_KEY is present) exactly as a consumer
- *     would ask — the model is never told which brand we're measuring.
- *  4. Each answer yields: brands mentioned + sources/domains the model would
- *     cite. Aggregations produce: overall visibility %, per-model slice,
- *     per-persona slice, per-topic slice, competitive leaderboard, and a
- *     citation-domain leaderboard (digital-PR targeting).
+ *  3. Probe every prompt against one of the configured engines (Gemini/OpenAI,
+ *     OpenAI explicitly, Anthropic Claude, Perplexity Sonar — whichever keys
+ *     are present), each exactly as a consumer would ask — the model is never
+ *     told which brand we're measuring. Prompts are distributed round-robin
+ *     across engines rather than fanned out to every engine, so total probe
+ *     count stays bounded regardless of how many keys are configured.
+ *  4. Each answer yields: brands mentioned + sources/domains (and full URLs,
+ *     when the model emits them) the model would cite. Aggregations produce:
+ *     overall visibility %, per-model slice, per-persona slice, per-topic
+ *     slice, competitive leaderboard, and a citation-domain leaderboard
+ *     (digital-PR targeting).
  *  5. If the brand was mentioned anywhere, one final call summarizes how the
- *     models characterized it (sentiment + descriptors) — brand perception.
+ *     models characterized it (sentiment + descriptors + attribute-level
+ *     sentiment drivers) — brand perception.
  */
 
 export interface PromptResult {
@@ -26,6 +32,8 @@ export interface PromptResult {
   mentioned: boolean;
   brands: string[];
   citations: string[];
+  /** Full URLs parsed out of SOURCES, when the model emitted them (subset of citations). */
+  citationUrls?: string[];
 }
 
 export interface LeaderboardEntry { brand: string; mentions: number; visibilityPct: number; isYou: boolean }
@@ -35,8 +43,16 @@ export interface Perception {
   sentiment: 'positive' | 'neutral' | 'mixed' | 'negative' | 'not_discussed';
   descriptors: string[];
   summary: string;
+  /** Attribute-level sentiment breakdown (price, quality, shipping, etc.), when the AI call surfaces it. */
+  drivers?: { attribute: string; sentiment: 'positive' | 'neutral' | 'negative'; evidence: string }[];
 }
-export interface PersonaDef { name: string; description: string }
+export interface PersonaDef {
+  name: string;
+  description: string;
+  role?: string;
+  painPoints?: string[];
+  purchaseCriteria?: string[];
+}
 
 export interface VisibilityResult {
   visibilityPct: number;
@@ -51,6 +67,12 @@ export interface VisibilityResult {
   personaDefs: PersonaDef[];
   citations: CitationEntry[];
   perception: Perception | null;
+  /**
+   * Raw answer texts (capped) from probes that mentioned the brand — consumed
+   * by the claims-accuracy stage in runAudit; stripped before persistence by
+   * callers that don't need it.
+   */
+  mentionedAnswers?: string[];
 }
 
 export interface VisibilityInput {
@@ -107,14 +129,23 @@ function deriveCategory(title: string, domain: string): string {
 const PROBE_SYSTEM =
   'You are a helpful shopping/search assistant. In 3-4 sentences, answer the user\'s question naturally with specific brand, product, and website recommendations, as you would for any consumer. Keep the answer brief — you MUST leave room to also output the two required final lines below; never let the answer run so long that those lines get cut off. After your (brief) answer, output exactly two final lines:\n' +
   'BRANDS: ["Brand One", "Brand Two"] — a JSON array of every brand, company, or website you mentioned.\n' +
-  'SOURCES: ["example.com"] — a JSON array of website domains you would cite or point the user to (may be empty).';
+  'SOURCES: ["example.com"] — a JSON array of website domains or full URLs you would cite or point the user to (may be empty).';
 
 interface ProbeTarget { model: string; ask: (prompt: string) => Promise<string> }
 
 /**
- * Build the list of models to probe: the active OpenAI-compatible provider
- * (Gemini or OpenAI) when keyed; Claude API when keyed; subscription CLI as
- * the local zero-cost fallback when no API key works.
+ * Build the list of engines to probe. Multi-engine when keys are available:
+ *  - Gemini or OpenAI, whichever `activeProvider()` resolves to (mutually
+ *    exclusive by design in ai.ts — Gemini wins if both keys are set).
+ *  - OpenAI explicitly, when OPENAI_API_KEY is set AND it wasn't already
+ *    picked as the active provider above (so both engines get probed
+ *    independently rather than collapsing into a single slot).
+ *  - Anthropic Claude, when ANTHROPIC_API_KEY is set.
+ *  - Perplexity Sonar (OpenAI-compatible endpoint), when PERPLEXITY_API_KEY
+ *    is set — genuinely search-grounded, a distinct and valuable GEO signal.
+ * Falls back to the local subscription CLI only when zero API keys resolved
+ * any target, so a production deployment with exactly one key still behaves
+ * exactly as before.
  */
 async function buildProbeTargets(): Promise<ProbeTarget[]> {
   const targets: ProbeTarget[] = [];
@@ -126,6 +157,23 @@ async function buildProbeTargets(): Promise<ProbeTarget[]> {
       ask: async (prompt) => {
         const r = await provider.client.chat.completions.create({
           model: provider.model,
+          max_tokens: 1200,
+          messages: [{ role: 'system', content: PROBE_SYSTEM }, { role: 'user', content: prompt }],
+        });
+        return r.choices[0]?.message?.content ?? '';
+      },
+    });
+  }
+
+  // OpenAI as an independent engine when it wasn't already chosen as the
+  // active provider above (i.e. Gemini took that slot instead).
+  if (process.env.OPENAI_API_KEY && provider?.label !== `OpenAI ${OPENAI_MODEL}`) {
+    const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    targets.push({
+      model: `OpenAI ${OPENAI_MODEL}`,
+      ask: async (prompt) => {
+        const r = await openaiClient.chat.completions.create({
+          model: OPENAI_MODEL,
           max_tokens: 1200,
           messages: [{ role: 'system', content: PROBE_SYSTEM }, { role: 'user', content: prompt }],
         });
@@ -151,6 +199,39 @@ async function buildProbeTargets(): Promise<ProbeTarget[]> {
     });
   }
 
+  if (process.env.PERPLEXITY_API_KEY) {
+    const perplexity = new OpenAI({ apiKey: process.env.PERPLEXITY_API_KEY, baseURL: 'https://api.perplexity.ai' });
+    targets.push({
+      model: 'Perplexity sonar',
+      ask: async (prompt) => {
+        const r = await perplexity.chat.completions.create({
+          model: 'sonar',
+          max_tokens: 1200,
+          messages: [{ role: 'system', content: PROBE_SYSTEM }, { role: 'user', content: prompt }],
+        });
+        return r.choices[0]?.message?.content ?? '';
+      },
+    });
+  }
+
+  // Agnes AI — free OpenAI-compatible gateway (apihub.agnes-ai.com), when
+  // AGNES_API_KEY is set. Adds an independent engine at zero marginal cost.
+  if (process.env.AGNES_API_KEY) {
+    const agnes = new OpenAI({ apiKey: process.env.AGNES_API_KEY, baseURL: 'https://apihub.agnes-ai.com/v1' });
+    const agnesModel = process.env.AGNES_MODEL || 'agnes-2.0-flash';
+    targets.push({
+      model: `Agnes ${agnesModel}`,
+      ask: async (prompt) => {
+        const r = await agnes.chat.completions.create({
+          model: agnesModel,
+          max_tokens: 1200,
+          messages: [{ role: 'system', content: PROBE_SYSTEM }, { role: 'user', content: prompt }],
+        });
+        return r.choices[0]?.message?.content ?? '';
+      },
+    });
+  }
+
   // Local subscription CLI — only when no API provider is configured, so a
   // production deployment (which has no CLI) is never silently half-probed.
   if (targets.length === 0 && cliAvailable()) {
@@ -161,6 +242,19 @@ async function buildProbeTargets(): Promise<ProbeTarget[]> {
   }
 
   return targets;
+}
+
+/**
+ * Distribute prompts across engines round-robin rather than probing every
+ * prompt against every engine — bounds total probe count at ~`plan.length`
+ * regardless of how many engines are configured, while still giving each
+ * engine a proportional, deterministic slice and asking every prompt exactly
+ * once. Pure/exported so the distribution logic is unit-testable without
+ * touching any AI provider.
+ */
+export function distributeAcrossTargets<P, T>(plan: P[], targets: T[]): { target: T; prompt: P }[] {
+  if (targets.length === 0) return [];
+  return plan.map((prompt, i) => ({ target: targets[i % targets.length], prompt }));
 }
 
 function parseList(text: string, tag: 'BRANDS' | 'SOURCES'): string[] {
@@ -178,7 +272,7 @@ function parseList(text: string, tag: 'BRANDS' | 'SOURCES'): string[] {
 async function generatePersonas(category: string): Promise<PersonaDef[]> {
   const raw = await aiText(
     null,
-    `Category: "${category}". Invent 3 distinct, realistic buyer personas for this category (like "Weekend Track-Day Enthusiast" or "Budget-Conscious Commuter"). Respond with ONLY JSON, no prose: {"personas":[{"name":"...","description":"one sentence"}]}`,
+    `Category: "${category}". Invent 3 distinct, realistic buyer personas for this category (like "Weekend Track-Day Enthusiast" or "Budget-Conscious Commuter"). Respond with ONLY JSON, no prose: {"personas":[{"name":"...","description":"one sentence","role":"short job/life role label","painPoints":["pain point", ...max 4],"purchaseCriteria":["what they weigh when buying", ...max 4]}]}`,
     { maxTokens: 2500 },
   );
   if (!raw) return [];
@@ -187,6 +281,17 @@ async function generatePersonas(category: string): Promise<PersonaDef[]> {
     ? parsed.personas
         .filter((p: unknown): p is PersonaDef => !!p && typeof (p as PersonaDef).name === 'string')
         .slice(0, 3)
+        .map((p) => ({
+          name: p.name,
+          description: p.description,
+          role: typeof p.role === 'string' ? p.role : undefined,
+          painPoints: Array.isArray(p.painPoints)
+            ? (p.painPoints as unknown[]).filter((x): x is string => typeof x === 'string').slice(0, 4)
+            : undefined,
+          purchaseCriteria: Array.isArray(p.purchaseCriteria)
+            ? (p.purchaseCriteria as unknown[]).filter((x): x is string => typeof x === 'string').slice(0, 4)
+            : undefined,
+        }))
     : [];
 }
 
@@ -223,12 +328,12 @@ function buildPromptPlan(category: string, keywords: string[], personas: Persona
     );
   }
 
-  // Dedup + cap. 8 prompts × N models keeps latency and cost sane.
+  // Dedup + cap. 8 prompts split round-robin across engines keeps latency and cost sane.
   const seen = new Set<string>();
   return plan.filter((p) => !seen.has(p.prompt) && seen.add(p.prompt)).slice(0, 8);
 }
 
-/** Summarize how the models characterized the brand (sentiment + descriptors). */
+/** Summarize how the models characterized the brand (sentiment + descriptors + drivers). */
 async function analyzePerception(brand: string, mentionedAnswers: string[]): Promise<Perception | null> {
   if (mentionedAnswers.length === 0) {
     return { sentiment: 'not_discussed', descriptors: [], summary: `${brand} was not mentioned in any AI answer, so no brand perception exists yet.` };
@@ -239,15 +344,29 @@ async function analyzePerception(brand: string, mentionedAnswers: string[]): Pro
   for (let attempt = 0; attempt < 2; attempt++) {
     const raw = await aiText(
       null,
-      `These are AI assistant answers that mentioned the brand "${brand}":\n\n${mentionedAnswers.join('\n---\n').slice(0, 6000)}\n\nSummarize how the brand was characterized. Respond with ONLY JSON, no prose: {"sentiment":"positive|neutral|mixed|negative","descriptors":["adjective or phrase", ...max 6],"summary":"one sentence"}`,
+      `These are AI assistant answers that mentioned the brand "${brand}":\n\n${mentionedAnswers.join('\n---\n').slice(0, 6000)}\n\nSummarize how the brand was characterized. Respond with ONLY JSON, no prose: {"sentiment":"positive|neutral|mixed|negative","descriptors":["adjective or phrase", ...max 6],"summary":"one sentence","drivers":[{"attribute":"e.g. price, quality, shipping","sentiment":"positive|neutral|negative","evidence":"short quote or paraphrase"}, ...max 6]}`,
       { maxTokens: 3000 },
     );
-    const parsed = raw ? (extractJson(raw) as { sentiment?: Perception['sentiment']; descriptors?: unknown; summary?: unknown } | null) : null;
+    const parsed = raw
+      ? (extractJson(raw) as { sentiment?: Perception['sentiment']; descriptors?: unknown; summary?: unknown; drivers?: unknown } | null)
+      : null;
     if (parsed?.sentiment) {
+      const drivers = Array.isArray(parsed.drivers)
+        ? (parsed.drivers as unknown[])
+            .filter(
+              (d): d is { attribute: string; sentiment: 'positive' | 'neutral' | 'negative'; evidence: string } =>
+                !!d &&
+                typeof (d as Record<string, unknown>).attribute === 'string' &&
+                typeof (d as Record<string, unknown>).sentiment === 'string' &&
+                typeof (d as Record<string, unknown>).evidence === 'string',
+            )
+            .slice(0, 6)
+        : undefined;
       return {
         sentiment: parsed.sentiment,
         descriptors: Array.isArray(parsed.descriptors) ? (parsed.descriptors as string[]).slice(0, 6) : [],
         summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+        ...(drivers && drivers.length > 0 ? { drivers } : {}),
       };
     }
     console.warn(`Perception analysis attempt ${attempt + 1} failed (${raw ? 'unparseable response' : 'no response'})`);
@@ -271,6 +390,41 @@ function slice(results: PromptResult[], key: (r: PromptResult) => string): Slice
   }));
 }
 
+export interface PersonaTopicCell { persona: string; topic: string; visibilityPct: number; prompts: number }
+export interface PersonaTopicHeatmap { personas: string[]; topics: string[]; cells: PersonaTopicCell[] }
+
+/**
+ * Cross-tab of persona x topic visibility from raw PromptResult data — pure
+ * function so it's independently testable without hitting any AI provider.
+ * Order of `personas`/`topics` follows first-seen order in `result.prompts`.
+ */
+export function personaTopicHeatmap(result: { prompts: PromptResult[] }): PersonaTopicHeatmap {
+  const personaOrder: string[] = [];
+  const topicOrder: string[] = [];
+  // Keyed on the pair itself (JSON-encoded) so persona/topic labels that
+  // might contain any delimiter character never collide or mis-split.
+  const cellMap = new Map<string, { persona: string; topic: string; total: number; hit: number }>();
+
+  for (const r of result.prompts) {
+    if (!personaOrder.includes(r.persona)) personaOrder.push(r.persona);
+    if (!topicOrder.includes(r.topic)) topicOrder.push(r.topic);
+    const key = JSON.stringify([r.persona, r.topic]);
+    const e = cellMap.get(key) ?? { persona: r.persona, topic: r.topic, total: 0, hit: 0 };
+    e.total++;
+    if (r.mentioned) e.hit++;
+    cellMap.set(key, e);
+  }
+
+  const cells: PersonaTopicCell[] = [...cellMap.values()].map(({ persona, topic, total, hit }) => ({
+    persona,
+    topic,
+    visibilityPct: Math.round((hit / total) * 100),
+    prompts: total,
+  }));
+
+  return { personas: personaOrder, topics: topicOrder, cells };
+}
+
 export async function analyzeVisibility(input: VisibilityInput): Promise<VisibilityResult | null> {
   const targets = await buildProbeTargets();
   if (targets.length === 0) return null;
@@ -283,19 +437,19 @@ export async function analyzeVisibility(input: VisibilityInput): Promise<Visibil
   const target = targetCandidates(input.domain, input.title);
 
   const settled = await Promise.allSettled(
-    targets.flatMap((t) =>
-      plan.map(async (p): Promise<PromptResult & { raw: string }> => {
-        const raw = await t.ask(p.prompt);
-        return {
-          ...p,
-          model: t.model,
-          mentioned: false,
-          brands: parseList(raw, 'BRANDS'),
-          citations: parseList(raw, 'SOURCES'),
-          raw,
-        };
-      }),
-    ),
+    distributeAcrossTargets(plan, targets).map(async ({ target: t, prompt: p }): Promise<PromptResult & { raw: string }> => {
+      const raw = await t.ask(p.prompt);
+      const rawSources = parseList(raw, 'SOURCES');
+      return {
+        ...p,
+        model: t.model,
+        mentioned: false,
+        brands: parseList(raw, 'BRANDS'),
+        citations: rawSources,
+        citationUrls: rawSources.filter((s) => /^https?:\/\//i.test(s)),
+        raw,
+      };
+    }),
   );
 
   const results: (PromptResult & { raw: string })[] = [];
@@ -377,5 +531,6 @@ export async function analyzeVisibility(input: VisibilityInput): Promise<Visibil
       .slice(0, 12)
       .map(([domain, count]) => ({ domain, count })),
     perception,
+    mentionedAnswers: mentionedAnswers.slice(0, 12).map((a) => a.slice(0, 1500)),
   };
 }
