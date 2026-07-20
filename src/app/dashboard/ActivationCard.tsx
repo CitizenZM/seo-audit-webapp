@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Download, Loader2, FileCode2, FileJson, HelpCircle } from 'lucide-react';
+import Explainer from './Explainer';
 
 type Kind = 'llms-txt' | 'schema' | 'faq-markup';
 
@@ -63,6 +64,13 @@ export default function ActivationCard({ auditPayload }: { auditPayload?: unknow
       <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
         <Download size={18} className="text-[var(--brand)]" /> AI-Ready Artifacts
       </h3>
+      <Explainer
+        what="Deployable artifacts generated from this audit: llms.txt (tells AI engines what your site is), JSON-LD schema, and FAQ markup — download and publish as-is."
+        actions={[
+          'Deploy llms.txt to your site root today — it\'s zero-risk and future-proofs agent ingestion.',
+          'Add the FAQ markup to high-traffic pages to win featured/AI answers.',
+        ]}
+      />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         Download deliverables generated from this audit to make the site more legible to AI crawlers and answer engines.
       </p>

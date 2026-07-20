@@ -1,6 +1,7 @@
 'use client';
 
 import { Radar } from 'lucide-react';
+import Explainer from './Explainer';
 
 interface GapEntry { domain: string; count: number; citedForTopics: string[]; outreachAngle: string }
 
@@ -21,7 +22,6 @@ function normalizeEntries(citationGap: unknown): GapEntry[] {
  */
 export default function CitationGapCard({ citationGap }: { citationGap?: unknown }) {
   const entries = normalizeEntries(citationGap);
-  if (entries.length === 0) return null;
 
   const max = Math.max(...entries.map((e) => e.count || 0), 1);
 
@@ -30,9 +30,21 @@ export default function CitationGapCard({ citationGap }: { citationGap?: unknown
       <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
         <Radar size={18} className="text-[var(--blue)]" /> Citation Gap
       </h3>
+      <Explainer
+        what="Domains AI engines cite in your category where your brand is absent — your highest-leverage digital-PR target list, each with a suggested outreach angle."
+        actions={[
+          'Work top-down: pitch the highest-count domains first using the outreach angle.',
+          'Track wins by re-auditing — cited domains should move into your Citation audit.',
+        ]}
+      />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         Domains AI engines cite in your category where you&apos;re absent — the highest-leverage outreach targets.
       </p>
+      {entries.length === 0 ? (
+        <p className="text-sm text-[var(--ink-3)]">
+          No citation gap data in this audit — run a new audit to populate this.
+        </p>
+      ) : (
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="bg-[var(--surface-2)] text-[var(--ink-3)] uppercase tracking-wider text-xs">
@@ -70,6 +82,7 @@ export default function CitationGapCard({ citationGap }: { citationGap?: unknown
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

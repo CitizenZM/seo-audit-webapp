@@ -2,6 +2,7 @@
 
 import { Quote } from 'lucide-react';
 import type { CitationEntry } from '@/lib/visibility';
+import Explainer from './Explainer';
 
 /**
  * Citation audit (Gumshoe "Monitor → Citation audit"): the domains AI models
@@ -10,8 +11,8 @@ import type { CitationEntry } from '@/lib/visibility';
  * enter AI answers.
  */
 export default function CitationsCard({ citations, domain }: { citations: CitationEntry[]; domain: string }) {
-  if (!citations || citations.length === 0) return null;
-  const max = Math.max(...citations.map((c) => c.count));
+  const list = citations ?? [];
+  const max = Math.max(...list.map((c) => c.count), 1);
   const you = domain.replace(/^www\./, '');
 
   return (
@@ -19,12 +20,24 @@ export default function CitationsCard({ citations, domain }: { citations: Citati
       <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-1">
         <Quote size={18} className="text-[var(--blue)]" /> Citation Audit
       </h3>
+      <Explainer
+        what="The web domains AI engines cite as sources when answering questions in your category — the sites shaping AI's opinion of your market."
+        actions={[
+          'Get listed/reviewed on the top cited domains — that\'s the fastest path into AI answers.',
+          'Cross-reference with Citation Gap below for prioritized outreach targets.',
+        ]}
+      />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         Domains AI models cite when answering questions in your category. Earning coverage on these sites is the
         most direct path into AI answers.
       </p>
+      {list.length === 0 ? (
+        <p className="text-sm text-[var(--ink-3)]">
+          No citation data in this audit — run a new audit to populate this.
+        </p>
+      ) : (
       <div className="flex flex-col gap-1.5">
-        {citations.map((c, i) => {
+        {list.map((c, i) => {
           const isYou = c.domain === you;
           return (
             <div key={c.domain} className={`flex items-center gap-3 px-2 py-1.5 rounded-lg ${isYou ? 'bg-[var(--brand-soft)]' : ''}`}>
@@ -40,6 +53,7 @@ export default function CitationsCard({ citations, domain }: { citations: Citati
           );
         })}
       </div>
+      )}
     </div>
   );
 }

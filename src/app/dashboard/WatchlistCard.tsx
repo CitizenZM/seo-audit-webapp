@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Bell, Loader2, CheckCircle2 } from 'lucide-react';
 import { supabaseBrowser } from '@/lib/supabase/browser';
+import Explainer from './Explainer';
 
 export default function WatchlistCard({ url, domain }: { url: string; domain: string }) {
   const [signedIn, setSignedIn] = useState<boolean | undefined>(undefined);
@@ -36,16 +37,20 @@ export default function WatchlistCard({ url, domain }: { url: string; domain: st
     }
   }
 
-  if (signedIn === undefined) return null;
-
   return (
     <div className="no-print card p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
           <Bell size={18} className="text-[var(--brand)]" /> Weekly monitoring
         </h3>
+        <Explainer
+          what="Domains monitored by the weekly scheduled re-audit — automatic tracking without manual runs."
+          actions={['Add your main domain plus 1-2 competitors to build comparative trends.']}
+        />
         <p className="text-sm text-[var(--ink-3)] mt-0.5">
-          {signedIn
+          {signedIn === undefined
+            ? 'Checking sign-in status…'
+            : signedIn
             ? `Get emailed when ${domain}'s SEO score changes, checked weekly.`
             : 'Sign in to get emailed when this score changes, checked weekly.'}
         </p>

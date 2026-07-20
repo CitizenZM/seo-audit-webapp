@@ -1,6 +1,7 @@
 'use client';
 
 import { ShieldCheck, ShieldAlert, ShieldQuestion } from 'lucide-react';
+import Explainer from './Explainer';
 
 interface Claim { claim: string; verdict: 'supported' | 'contradicted' | 'unverifiable'; evidence?: string }
 
@@ -16,7 +17,6 @@ const verdictStyle: Record<Claim['verdict'], { label: string; color: string; sof
  */
 export default function ClaimsAccuracyCard({ claims }: { claims?: { claims: Claim[] } | null }) {
   const list = claims?.claims ?? [];
-  if (list.length === 0) return null;
 
   const contradicted = list.filter((c) => c.verdict === 'contradicted').length;
 
@@ -35,6 +35,18 @@ export default function ClaimsAccuracyCard({ claims }: { claims?: { claims: Clai
           </span>
         )}
       </div>
+      <Explainer
+        what="Factual claims AI assistants make about your brand, checked against your actual site. 'Contradicted' means AI is telling customers something that's wrong."
+        actions={[
+          'Correct contradicted claims by publishing the accurate fact prominently (FAQ, About page, llms.txt).',
+          'For unverifiable claims, add the missing fact to your site so AI can ground it.',
+        ]}
+      />
+      {list.length === 0 ? (
+        <p className="text-sm text-[var(--ink-3)]">
+          No claims accuracy data in this audit — run a new audit to populate this.
+        </p>
+      ) : (
       <div className="flex flex-col gap-2">
         {list.map((c, i) => {
           const v = verdictStyle[c.verdict] ?? verdictStyle.unverifiable;
@@ -55,6 +67,7 @@ export default function ClaimsAccuracyCard({ claims }: { claims?: { claims: Clai
           );
         })}
       </div>
+      )}
     </div>
   );
 }

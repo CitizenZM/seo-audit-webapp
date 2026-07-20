@@ -5,6 +5,16 @@ import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js';
 import { AlertCircle, Eye, ChevronDown, ChevronUp, MessageSquare, KeyRound, Bot, UserRound, Tags, Smile } from 'lucide-react';
 import type { VisibilityResult } from '@/lib/visibility';
+import Explainer from './Explainer';
+
+const visibilityExplainer = {
+  what: 'We ask real AI assistants (ChatGPT, Gemini, Claude, Perplexity) the questions your customers ask, then measure how often your brand appears in the answers. This % is your share of AI recommendations — the AI-era equivalent of ranking on page 1.',
+  actions: [
+    'Below 10%? Prioritize the Citation Gap section — get cited on the sources AI engines trust.',
+    'Compare per-engine slices: a gap on one engine means its crawler may be blocked (check AI crawlers & GEO).',
+    'Re-run audits weekly to build the Visibility Trend.',
+  ],
+};
 
 ChartJS.register(ArcElement, Tooltip);
 
@@ -22,6 +32,7 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
         <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2 mb-2">
           <Eye size={18} className="text-[var(--brand)]" /> Brand Visibility in AI Answers
         </h3>
+        <Explainer {...visibilityExplainer} />
         <div className="flex items-start gap-3 rounded-xl bg-[var(--amber-soft)] border border-[var(--amber)]/20 p-4">
           <KeyRound size={18} className="text-[var(--amber)] mt-0.5 shrink-0" />
           <p className="text-sm text-[var(--ink-2)]">
@@ -78,6 +89,8 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
           </p>
         </div>
       </div>
+
+      <Explainer {...visibilityExplainer} />
 
       {low && (
         <div className="flex items-start gap-3 rounded-xl bg-[var(--amber-soft)] border border-[var(--amber)]/25 p-4 mb-5">
