@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Gauge, Search, Sparkles } from 'lucide-react';
 import Explainer from './Explainer';
+import ProgramStrategyCard from './ProgramStrategyCard';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import StatCard from './StatCard';
@@ -645,11 +646,13 @@ function DashboardContent() {
           </section>
 
           {/* Action Plan Board & Content Calendar */}
+          <ProgramStrategyCard strategy={data.programStrategy ?? null} />
+
           <section id="reports" className="flex flex-col gap-5 scroll-mt-20">
             <Explainer
-              what="Everything actionable from this audit in one place: the prioritized optimization plan, deployable AI-ready artifacts, and the content calendar."
+              what="Everything actionable from this audit in one place: the systematic Program Strategy above sets direction; below are the prioritized optimization plan, deployable AI-ready artifacts, and the content calendar that execute it."
               actions={[
-                'Work top-down: quick wins → high-impact plan items → calendar content.',
+                'Start from the Program Strategy P0 initiatives, then work quick wins → high-impact plan items.',
                 'Export the branded PDF report from the Reports page to share with stakeholders or clients.',
               ]}
               defaultOpen
