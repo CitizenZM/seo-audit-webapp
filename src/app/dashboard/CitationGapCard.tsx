@@ -2,6 +2,7 @@
 
 import { Radar } from 'lucide-react';
 import Explainer from './Explainer';
+import SolutionPanel, { type SectionSolutionData } from './SolutionPanel';
 
 interface GapEntry { domain: string; count: number; citedForTopics: string[]; outreachAngle: string }
 
@@ -20,7 +21,7 @@ function normalizeEntries(citationGap: unknown): GapEntry[] {
  * Citation Gap — domains AI engines cite in this category where the brand is
  * absent. Ranked digital-PR / outreach target list.
  */
-export default function CitationGapCard({ citationGap }: { citationGap?: unknown }) {
+export default function CitationGapCard({ citationGap, solution }: { citationGap?: unknown; solution?: SectionSolutionData | null }) {
   const entries = normalizeEntries(citationGap);
 
   const max = Math.max(...entries.map((e) => e.count || 0), 1);
@@ -37,6 +38,7 @@ export default function CitationGapCard({ citationGap }: { citationGap?: unknown
           'Track wins by re-auditing — cited domains should move into your Citation audit.',
         ]}
       />
+      <SolutionPanel solution={solution} />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         Domains AI engines cite in your category where you&apos;re absent — the highest-leverage outreach targets.
       </p>

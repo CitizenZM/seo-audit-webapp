@@ -2,6 +2,7 @@
 
 import { ShieldCheck, ShieldAlert, ShieldQuestion } from 'lucide-react';
 import Explainer from './Explainer';
+import SolutionPanel, { type SectionSolutionData } from './SolutionPanel';
 
 interface Claim { claim: string; verdict: 'supported' | 'contradicted' | 'unverifiable'; evidence?: string }
 
@@ -15,7 +16,7 @@ const verdictStyle: Record<Claim['verdict'], { label: string; color: string; sof
  * Claims Accuracy — what AI models are actually claiming about the brand,
  * fact-checked and verdict-tagged (supported / contradicted / unverifiable).
  */
-export default function ClaimsAccuracyCard({ claims }: { claims?: { claims: Claim[] } | null }) {
+export default function ClaimsAccuracyCard({ claims, solution }: { claims?: { claims: Claim[] } | null; solution?: SectionSolutionData | null }) {
   const list = claims?.claims ?? [];
 
   const contradicted = list.filter((c) => c.verdict === 'contradicted').length;
@@ -42,6 +43,7 @@ export default function ClaimsAccuracyCard({ claims }: { claims?: { claims: Clai
           'For unverifiable claims, add the missing fact to your site so AI can ground it.',
         ]}
       />
+      <SolutionPanel solution={solution} />
       {list.length === 0 ? (
         <p className="text-sm text-[var(--ink-3)]">
           No claims accuracy data in this audit — run a new audit to populate this.

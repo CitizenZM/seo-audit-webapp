@@ -6,6 +6,7 @@ import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js';
 import { AlertCircle, Eye, ChevronDown, ChevronUp, MessageSquare, KeyRound, Bot, UserRound, Tags, Smile } from 'lucide-react';
 import type { VisibilityResult } from '@/lib/visibility';
 import Explainer from './Explainer';
+import SolutionPanel, { type SectionSolutionData } from './SolutionPanel';
 
 const visibilityExplainer = {
   what: 'We ask real AI assistants (ChatGPT, Gemini, Claude, Perplexity) the questions your customers ask, then measure how often your brand appears in the answers. This % is your share of AI recommendations — the AI-era equivalent of ranking on page 1.',
@@ -23,7 +24,7 @@ ChartJS.register(ArcElement, Tooltip);
  * donut % · low-visibility banner · competitive leaderboard · per-model /
  * per-persona / per-topic slices · brand perception · probed conversations.
  */
-export default function VisibilityCard({ visibility, domain }: { visibility: VisibilityResult | null; domain: string }) {
+export default function VisibilityCard({ visibility, domain, solution }: { visibility: VisibilityResult | null; domain: string; solution?: SectionSolutionData | null }) {
   const [showPrompts, setShowPrompts] = useState(false);
 
   if (!visibility) {
@@ -91,6 +92,7 @@ export default function VisibilityCard({ visibility, domain }: { visibility: Vis
       </div>
 
       <Explainer {...visibilityExplainer} />
+      <SolutionPanel solution={solution} />
 
       {low && (
         <div className="flex items-start gap-3 rounded-xl bg-[var(--amber-soft)] border border-[var(--amber)]/25 p-4 mb-5">

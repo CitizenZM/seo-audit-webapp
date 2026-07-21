@@ -3,6 +3,7 @@
 import { Quote } from 'lucide-react';
 import type { CitationEntry } from '@/lib/visibility';
 import Explainer from './Explainer';
+import SolutionPanel, { type SectionSolutionData } from './SolutionPanel';
 
 /**
  * Citation audit (Gumshoe "Monitor → Citation audit"): the domains AI models
@@ -10,7 +11,7 @@ import Explainer from './Explainer';
  * list. Earning mentions/links on these sites is the highest-leverage way to
  * enter AI answers.
  */
-export default function CitationsCard({ citations, domain }: { citations: CitationEntry[]; domain: string }) {
+export default function CitationsCard({ citations, domain, solution }: { citations: CitationEntry[]; domain: string; solution?: SectionSolutionData | null }) {
   const list = citations ?? [];
   const max = Math.max(...list.map((c) => c.count), 1);
   const you = domain.replace(/^www\./, '');
@@ -27,6 +28,7 @@ export default function CitationsCard({ citations, domain }: { citations: Citati
           'Cross-reference with Citation Gap below for prioritized outreach targets.',
         ]}
       />
+      <SolutionPanel solution={solution} />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         Domains AI models cite when answering questions in your category. Earning coverage on these sites is the
         most direct path into AI answers.

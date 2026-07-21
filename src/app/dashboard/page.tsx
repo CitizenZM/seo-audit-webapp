@@ -260,24 +260,24 @@ function DashboardContent() {
           </section>
 
           {/* Brand Visibility — Gumshoe-style visibility audit (headline section) */}
-          <VisibilityCard visibility={data.visibility ?? null} domain={data.domain} />
+          <VisibilityCard visibility={data.visibility ?? null} domain={data.domain} solution={data.sectionSolutions?.visibility ?? null} />
 
           {/* Persona x Topic heatmap + persona detail (role/pain points/purchase criteria) */}
-          <PersonaHeatmap heatmap={data.visibilityExtras?.heatmap ?? null} personaDefs={data.visibility?.personaDefs ?? null} />
+          <PersonaHeatmap heatmap={data.visibilityExtras?.heatmap ?? null} personaDefs={data.visibility?.personaDefs ?? null} solution={data.sectionSolutions?.['persona-heatmap'] ?? null} />
 
           {/* Perception drivers — sentiment-tagged attributes with evidence */}
-          <SentimentDriversCard drivers={data.visibility?.perception?.drivers ?? null} />
+          <SentimentDriversCard drivers={data.visibility?.perception?.drivers ?? null} solution={data.sectionSolutions?.['sentiment-drivers'] ?? null} />
 
           {/* Claims accuracy — fact-check of what AI models say about the brand */}
-          <ClaimsAccuracyCard claims={data.visibilityExtras?.claims ?? null} />
+          <ClaimsAccuracyCard claims={data.visibilityExtras?.claims ?? null} solution={data.sectionSolutions?.['claims-accuracy'] ?? null} />
 
           {/* Citation audit — which domains AI models cite in this category */}
           {data.visibility?.citations?.length > 0 && (
-            <CitationsCard citations={data.visibility.citations} domain={data.domain} />
+            <CitationsCard citations={data.visibility.citations} domain={data.domain} solution={data.sectionSolutions?.citations ?? null} />
           )}
 
           {/* Citation gap — domains AI engines cite where the brand is absent (outreach targets) */}
-          <CitationGapCard citationGap={data.visibilityExtras?.citationGap ?? null} />
+          <CitationGapCard citationGap={data.visibilityExtras?.citationGap ?? null} solution={data.sectionSolutions?.['citation-gap'] ?? null} />
 
           {/* Trends — score history for this URL */}
           <TrendsCard url={data.url} />
@@ -286,10 +286,10 @@ function DashboardContent() {
           <VisibilityTrendCard domain={data.domain} />
 
           {/* GEO — AI crawler access & readiness */}
-          {data.geo && <GeoCard geo={data.geo} />}
+          {data.geo && <GeoCard geo={data.geo} solution={data.sectionSolutions?.geo ?? null} />}
 
           {/* Commerce readiness — AI shopping-agent checklist */}
-          <CommerceReadinessCard commerce={data.geo?.commerce ?? null} />
+          <CommerceReadinessCard commerce={data.geo?.commerce ?? null} solution={data.sectionSolutions?.['commerce-readiness'] ?? null} />
 
           {/* Crawler analytics — real AI/search bot hits via Vercel Log Drain */}
           <CrawlerAnalyticsCard />
