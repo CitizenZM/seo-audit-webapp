@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Grid3x3, ChevronDown, ChevronUp } from 'lucide-react';
 import Explainer from './Explainer';
+import SolutionPanel, { type SectionSolutionData } from './SolutionPanel';
 
 interface PersonaDef {
   name: string;
@@ -29,9 +30,11 @@ function cellColor(pct: number): string {
 export default function PersonaHeatmap({
   heatmap,
   personaDefs,
+  solution,
 }: {
   heatmap?: Heatmap | null;
   personaDefs?: PersonaDef[] | null;
+  solution?: SectionSolutionData | null;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -56,6 +59,7 @@ export default function PersonaHeatmap({
           'Expand a persona chip to see their pain points and purchase criteria — mirror that language on your landing pages.',
         ]}
       />
+      <SolutionPanel solution={solution} />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         Where the brand shows up (or doesn&apos;t) across buyer personas and question topics in AI answers.
       </p>

@@ -2,6 +2,7 @@
 
 import { ShoppingCart, CheckCircle2, XCircle } from 'lucide-react';
 import Explainer from './Explainer';
+import SolutionPanel, { type SectionSolutionData } from './SolutionPanel';
 
 interface Check { id: string; label: string; passed: boolean; detail: string; impact: 'high' | 'medium' | 'low' }
 interface Commerce { score: number; checks: Check[] }
@@ -30,7 +31,7 @@ const commerceExplainer = {
   ],
 };
 
-export default function CommerceReadinessCard({ commerce }: { commerce?: Commerce | null }) {
+export default function CommerceReadinessCard({ commerce, solution }: { commerce?: Commerce | null; solution?: SectionSolutionData | null }) {
   const tone = commerce ? scoreTone(commerce.score) : scoreTone(0);
 
   return (
@@ -55,6 +56,7 @@ export default function CommerceReadinessCard({ commerce }: { commerce?: Commerc
       </div>
 
       <Explainer {...commerceExplainer} />
+      <SolutionPanel solution={solution} />
 
       {!commerce ? (
         <p className="text-sm text-[var(--ink-3)]">

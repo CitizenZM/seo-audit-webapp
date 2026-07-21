@@ -2,6 +2,7 @@
 
 import { Bot, CheckCircle2, XCircle, Sparkles, FileText, Clock, HelpCircle, Code } from 'lucide-react';
 import Explainer from './Explainer';
+import SolutionPanel, { type SectionSolutionData } from './SolutionPanel';
 
 interface BotAccess { name: string; engine: string; allowed: boolean }
 interface Geo {
@@ -34,7 +35,7 @@ const geoExplainer = {
   ],
 };
 
-export default function GeoCard({ geo }: { geo: Geo | null }) {
+export default function GeoCard({ geo, solution }: { geo: Geo | null; solution?: SectionSolutionData | null }) {
   if (!geo) {
     return (
       <div id="geo" className="card p-4 sm:p-6 scroll-mt-20">
@@ -42,6 +43,7 @@ export default function GeoCard({ geo }: { geo: Geo | null }) {
           <Sparkles size={18} className="text-[var(--brand)]" /> Generative Engine Optimization (GEO)
         </h3>
         <Explainer {...geoExplainer} />
+        <SolutionPanel solution={solution} />
         <p className="text-sm text-[var(--ink-3)]">
           No GEO data in this audit — run a new audit to populate this.
         </p>
@@ -86,6 +88,7 @@ export default function GeoCard({ geo }: { geo: Geo | null }) {
       </div>
 
       <Explainer {...geoExplainer} />
+      <SolutionPanel solution={solution} />
 
       {/* AI crawler access */}
       <div className="mb-5">

@@ -2,6 +2,7 @@
 
 import { Smile, Meh, Frown } from 'lucide-react';
 import Explainer from './Explainer';
+import SolutionPanel, { type SectionSolutionData } from './SolutionPanel';
 
 interface Driver { attribute: string; sentiment: 'positive' | 'neutral' | 'negative'; evidence: string }
 
@@ -15,7 +16,7 @@ const sentimentStyle: Record<Driver['sentiment'], { label: string; color: string
  * Sentiment Drivers — the specific attributes driving how AI models talk
  * about the brand, each backed by a quoted evidence line.
  */
-export default function SentimentDriversCard({ drivers }: { drivers?: Driver[] | null }) {
+export default function SentimentDriversCard({ drivers, solution }: { drivers?: Driver[] | null; solution?: SectionSolutionData | null }) {
   const list = drivers ?? [];
 
   return (
@@ -30,6 +31,7 @@ export default function SentimentDriversCard({ drivers }: { drivers?: Driver[] |
           'Amplify positive drivers in your homepage copy and schema so AI answers repeat them.',
         ]}
       />
+      <SolutionPanel solution={solution} />
       <p className="text-sm text-[var(--ink-3)] mb-4">
         The specific attributes shaping how AI models describe this brand.
       </p>

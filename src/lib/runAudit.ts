@@ -9,6 +9,7 @@ import { analyzeVisibility, personaTopicHeatmap } from '@/lib/visibility';
 import { analyzeCitationGap } from '@/lib/citationGap';
 import { checkClaimsAccuracy } from '@/lib/claimsAccuracy';
 import { saveVisibilitySnapshot } from '@/lib/trends';
+import { generateSectionSolutions, buildFindings } from '@/lib/sectionSolutions';
 import { generateOptimizationPlan } from '@/lib/optimizationPlan';
 
 export type Stage = 'crawl' | 'competitors' | 'speed' | 'ai' | 'serp' | 'plan' | 'done';
@@ -587,6 +588,27 @@ export async function runAudit(
 
   const geoIssues = geo?.recommendations ?? [];
 
+  // Per-section action plans: problems → solutions → roadmap, generated from
+  // each section's actual findings. Runs concurrently with the optimization
+  // plan (two independent AI workloads); both degrade to null gracefully.
+  const sectionSolutionsPromise = generateSectionSolutions({
+    domain: publicMainAnalysis.domain,
+    category: publicMainAnalysis.onPage.title,
+    findings: buildFindings({
+      domain: publicMainAnalysis.domain,
+      visibility,
+      visibilityExtras,
+      geo,
+      technicalIssues,
+      onPageIssues,
+      synthesis,
+      competitors: publicCompetitors.map((c) => ({ domain: c.domain, wordCount: c.onPage?.wordCount })),
+    }),
+  }).catch((e) => {
+    console.warn('Section solutions skipped:', e instanceof Error ? e.message : e);
+    return null;
+  });
+
   const optimizationPlan = await generateOptimizationPlan({
     domain: publicMainAnalysis.domain,
     overallScore: scoreBreakdown.overall,
@@ -601,6 +623,8 @@ export async function runAudit(
     return null;
   });
 
+  const sectionSolutions = await sectionSolutionsPromise;
+
   await onStage?.('done');
 
   return {
@@ -612,6 +636,7 @@ export async function runAudit(
       geo,
       visibility,
       visibilityExtras,
+      sectionSolutions,
       optimizationPlan,
       overallScore: scoreBreakdown.overall,
       geoScore: geo?.score ?? null,
