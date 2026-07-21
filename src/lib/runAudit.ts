@@ -10,6 +10,7 @@ import { analyzeCitationGap } from '@/lib/citationGap';
 import { checkClaimsAccuracy } from '@/lib/claimsAccuracy';
 import { saveVisibilitySnapshot } from '@/lib/trends';
 import { generateSectionSolutions, buildFindings } from '@/lib/sectionSolutions';
+import { generateProgramStrategy } from '@/lib/programStrategy';
 import { generateOptimizationPlan } from '@/lib/optimizationPlan';
 
 export type Stage = 'crawl' | 'competitors' | 'speed' | 'ai' | 'serp' | 'plan' | 'done';
@@ -625,6 +626,39 @@ export async function runAudit(
 
   const sectionSolutions = await sectionSolutionsPromise;
 
+  // Program Strategy — the systematic layer that ties every finding into one
+  // executive program (workstreams → initiatives → phases → KPIs). Runs last
+  // because it grounds itself in the optimization plan and section solutions.
+  const claims = visibilityExtras?.claims?.claims ?? [];
+  const heatCells = visibilityExtras?.heatmap?.cells ?? [];
+  const programStrategy = await generateProgramStrategy({
+    domain: publicMainAnalysis.domain,
+    category: publicMainAnalysis.onPage.title,
+    overallScore: scoreBreakdown.overall,
+    geoScore: geo?.score ?? null,
+    visibilityPct: visibility?.visibilityPct ?? null,
+    commerceScore: geo?.commerce?.score ?? null,
+    technicalIssues,
+    onPageIssues,
+    geoIssues,
+    citedDomains: (visibility?.citations ?? []).map((c) => c.domain),
+    competitors: (visibility?.leaderboard ?? []).filter((l) => !l.isYou).map((l) => l.brand),
+    keywords: (synthesis?.keywordOpportunities ?? []).map((k: { keyword: string; intent?: string }) => ({
+      keyword: k.keyword,
+      intent: k.intent,
+    })),
+    contradictedClaims: claims.filter((c) => c.verdict === 'contradicted').map((c) => c.claim),
+    weakestPersonaCells: [...heatCells]
+      .sort((a, b) => a.visibilityPct - b.visibilityPct)
+      .slice(0, 4)
+      .map((c) => `${c.persona}/${c.topic} ${c.visibilityPct}%`),
+    sectionSolutions,
+    projectedScore: optimizationPlan?.projectedOverallScore ?? null,
+  }).catch((e) => {
+    console.warn('Program strategy skipped:', e instanceof Error ? e.message : e);
+    return null;
+  });
+
   await onStage?.('done');
 
   return {
@@ -637,6 +671,7 @@ export async function runAudit(
       visibility,
       visibilityExtras,
       sectionSolutions,
+      programStrategy,
       optimizationPlan,
       overallScore: scoreBreakdown.overall,
       geoScore: geo?.score ?? null,
