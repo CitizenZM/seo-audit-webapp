@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { aiText, extractJson } from './ai';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { activeProvider, cliAvailable, aiText, extractJson } from './ai';
 
 /**
  * Per-section solution engine.
@@ -57,8 +58,49 @@ export const SEO_SECTIONS = [
   'content',
 ] as const;
 
-const BatchSchema = (keys: readonly string[]) =>
-  z.object(Object.fromEntries(keys.map((k) => [k, SectionSolutionSchema.optional()])));
+/**
+ * Wire schema for response_format: no min/max and a flat sections array —
+ * Gemini's OpenAI-compat endpoint 400s on nested array constraints (verified
+ * 2026-09-25), and free-form JSON truncated in production. normalizeSections
+ * enforces the strict SectionSolutionSchema limits locally.
+ */
+const Lvl = z.enum(['low', 'medium', 'high']);
+const WireSectionsSchema = z.object({
+  sections: z.array(
+    z.object({
+      id: z.string(),
+      problems: z.array(z.string()),
+      solutions: z.array(z.object({ title: z.string(), steps: z.array(z.string()), effort: Lvl, impact: Lvl })),
+      roadmap: z.array(z.object({ phase: z.enum(['Now', '30 days', '90 days']), focus: z.string() })),
+    }),
+  ),
+});
+
+/**
+ * Loose model output → strict per-section map. Accepts the wire shape
+ * ({sections:[{id,...}]}) or the legacy keyed object ({geo:{...}}) the CLI
+ * path may still emit. Clamps arrays to strict maxima, keeps only requested
+ * ids, and drops (not fails) any section that can't meet the minimums.
+ */
+export function normalizeSections(raw: unknown, allowed: readonly string[]): SectionSolutions {
+  if (!raw || typeof raw !== 'object') return {};
+  const r = raw as Record<string, unknown>;
+  const entries: [string, Record<string, unknown>][] = Array.isArray(r.sections)
+    ? (r.sections as Record<string, unknown>[]).filter((x) => x && typeof x.id === 'string').map((x) => [x.id as string, x])
+    : Object.entries(r).filter(([, v]) => v && typeof v === 'object') as [string, Record<string, unknown>][];
+  const arr = <T>(v: unknown, max: number): T[] => (Array.isArray(v) ? (v as T[]).slice(0, max) : []);
+  const out: SectionSolutions = {};
+  for (const [id, v] of entries) {
+    if (!allowed.includes(id) || out[id]) continue;
+    const parsed = SectionSolutionSchema.safeParse({
+      problems: arr(v.problems, 3),
+      solutions: arr<Record<string, unknown>>(v.solutions, 3).map((x) => ({ ...x, steps: arr(x.steps, 4) })),
+      roadmap: arr(v.roadmap, 3),
+    });
+    if (parsed.success) out[id] = parsed.data;
+  }
+  return out;
+}
 
 export interface SectionSolutionsInput {
   domain: string;
@@ -182,19 +224,28 @@ async function generateBatch(
     `- "roadmap": up to 3 items {"phase":"Now|30 days|90 days","focus":"one sentence"}\n` +
     `Keep every string under 160 characters. Output ONLY a JSON object keyed by section id: {${present.map((k) => `"${k}":{...}`).join(',')}}`;
 
-  const raw = await aiText(system, user, { maxTokens: 3000 });
-  if (!raw) return {};
-  const parsed = BatchSchema(present).safeParse(extractJson(raw));
-  if (!parsed.success) {
-    console.warn('Section solutions batch failed validation:', parsed.error.issues.slice(0, 3));
-    return {};
+  const provider = activeProvider();
+  if (provider) {
+    try {
+      const response = await provider.client.chat.completions.parse({
+        model: provider.model,
+        max_tokens: 8000,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: `${user}\nReturn {"sections":[{"id":"<section id>",...}]} with one entry per section.` },
+        ],
+        response_format: zodResponseFormat(WireSectionsSchema, 'section_solutions'),
+      });
+      const out = normalizeSections(response.choices[0]?.message?.parsed, present);
+      if (Object.keys(out).length > 0) return out;
+      console.warn('Section solutions: structured output produced no valid sections');
+    } catch (e) {
+      console.warn('Section solutions structured call failed:', e instanceof Error ? e.message : e);
+    }
   }
-  const out: SectionSolutions = {};
-  for (const k of present) {
-    const val = (parsed.data as Record<string, SectionSolution | undefined>)[k];
-    if (val) out[k] = val;
-  }
-  return out;
+  if (!cliAvailable()) return {};
+  const raw = await aiText(system, user, { maxTokens: 8000 });
+  return raw ? normalizeSections(extractJson(raw), present) : {};
 }
 
 /**
