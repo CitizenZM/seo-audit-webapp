@@ -54,6 +54,87 @@ export const ProgramStrategySchema = z.object({
 
 export type ProgramStrategy = z.infer<typeof ProgramStrategySchema>;
 
+/**
+ * Wire schema sent to the model as response_format. Gemini's OpenAI-compat
+ * endpoint rejects (HTTP 400, no body) schemas with nested array min/max
+ * constraints — verified live 2026-09-25 by bisection: each constraint alone
+ * passes, the nested combination fails. So the model gets a constraint-free
+ * shape (and a required dependsOn string, "" = none), and normalizeStrategy
+ * enforces the strict limits locally.
+ */
+const Level = z.enum(['low', 'medium', 'high']);
+const WireStrategySchema = z.object({
+  northStar: z.string(),
+  currentState: z.array(z.string()),
+  workstreams: z.array(
+    z.object({
+      name: z.string(),
+      objective: z.string(),
+      kpi: z.string(),
+      initiatives: z.array(
+        z.object({
+          title: z.string(),
+          priority: z.enum(['P0', 'P1', 'P2']),
+          effort: Level,
+          impact: Level,
+          timeframe: z.string(),
+          successMetric: z.string(),
+          dependsOn: z.string(),
+        }),
+      ),
+    }),
+  ),
+  phases: z.array(
+    z.object({
+      name: z.string(),
+      timeframe: z.string(),
+      goals: z.array(z.string()),
+      milestones: z.array(z.string()),
+      kpiTargets: z.array(z.string()),
+    }),
+  ),
+  measurement: z.object({ cadence: z.string(), coreKpis: z.array(z.string()) }),
+});
+
+/**
+ * Clamp loose model output to the strict schema's maxima, drop empty
+ * dependsOn, then validate. Returns null if strict minimums aren't met —
+ * clamping can shorten arrays, never invent content. Pure; unit tested.
+ */
+export function normalizeStrategy(raw: unknown): ProgramStrategy | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const arr = <T>(v: unknown, max: number): T[] => (Array.isArray(v) ? (v as T[]).slice(0, max) : []);
+  const ws = arr<Record<string, unknown>>(r.workstreams, 5).map((w) => ({
+    ...w,
+    initiatives: arr<Record<string, unknown>>(w.initiatives, 4).map((i) => {
+      const dep = typeof i.dependsOn === 'string' ? i.dependsOn.trim() : '';
+      const { dependsOn: _drop, ...rest } = i;
+      void _drop;
+      return dep ? { ...rest, dependsOn: dep } : rest;
+    }),
+  }));
+  const phases = arr<Record<string, unknown>>(r.phases, 3).map((p) => ({
+    ...p,
+    goals: arr(p.goals, 3),
+    milestones: arr(p.milestones, 4),
+    kpiTargets: arr(p.kpiTargets, 4),
+  }));
+  const m = (r.measurement ?? {}) as Record<string, unknown>;
+  const parsed = ProgramStrategySchema.safeParse({
+    northStar: r.northStar,
+    currentState: arr(r.currentState, 5),
+    workstreams: ws,
+    phases,
+    measurement: { cadence: m.cadence, coreKpis: arr(m.coreKpis, 6) },
+  });
+  if (!parsed.success) {
+    console.warn('Program strategy failed strict validation:', parsed.error.issues.slice(0, 3));
+    return null;
+  }
+  return parsed.data;
+}
+
 export interface ProgramStrategyInput {
   domain: string;
   category?: string;
@@ -134,10 +215,10 @@ export async function generateProgramStrategy(
             { role: 'system', content: SYSTEM },
             { role: 'user', content: user },
           ],
-          response_format: zodResponseFormat(ProgramStrategySchema, 'program_strategy'),
+          response_format: zodResponseFormat(WireStrategySchema, 'program_strategy'),
         });
-        const parsed = response.choices[0]?.message?.parsed;
-        if (parsed) return parsed;
+        const normalized = normalizeStrategy(response.choices[0]?.message?.parsed);
+        if (normalized) return normalized;
         console.warn(`Program strategy returned no parsed output (attempt ${attempt + 1})`);
       } catch (e) {
         console.warn(`Program strategy error (attempt ${attempt + 1}):`, e instanceof Error ? e.message : e);
@@ -150,9 +231,9 @@ export async function generateProgramStrategy(
     for (let attempt = 0; attempt < 2; attempt++) {
       const raw = await aiText(SYSTEM, user, { maxTokens: 8000 });
       if (!raw) continue;
-      const parsed = ProgramStrategySchema.safeParse(extractJson(raw));
-      if (parsed.success) return parsed.data;
-      console.warn(`CLI program strategy failed validation (attempt ${attempt + 1}):`, parsed.error.issues.slice(0, 3));
+      const normalized = normalizeStrategy(extractJson(raw));
+      if (normalized) return normalized;
+      console.warn(`CLI program strategy failed validation (attempt ${attempt + 1})`);
     }
   }
 

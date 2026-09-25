@@ -101,3 +101,48 @@ describe('ProgramStrategySchema', () => {
     ).toBe(false);
   });
 });
+
+describe('normalizeStrategy (loose model output → strict schema)', () => {
+  const init = (p: string, dep = '') => ({
+    title: `t-${p}`, priority: p, effort: 'low', impact: 'high', timeframe: 'Week 1', successMetric: 'm', dependsOn: dep,
+  });
+  const ws = (n: number) => ({ name: `w${n}`, objective: 'o', kpi: 'k', initiatives: [init('P1'), init('P0', 'x'), init('P2'), init('P1'), init('P2')] });
+  const phase = (n: number) => ({ name: `p${n}`, timeframe: 'Days', goals: ['a', 'b', 'c', 'd'], milestones: ['m'], kpiTargets: ['k'] });
+
+  it('clamps over-long arrays to the strict limits and validates', async () => {
+    const { normalizeStrategy } = await import('./programStrategy');
+    const out = normalizeStrategy({
+      northStar: 'n',
+      currentState: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+      workstreams: [ws(1), ws(2), ws(3), ws(4), ws(5), ws(6)],
+      phases: [phase(1), phase(2), phase(3), phase(4)],
+      measurement: { cadence: 'weekly', coreKpis: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] },
+    });
+    expect(out).not.toBeNull();
+    expect(out!.currentState).toHaveLength(5);
+    expect(out!.workstreams).toHaveLength(5);
+    expect(out!.workstreams[0].initiatives).toHaveLength(4);
+    expect(out!.phases).toHaveLength(3);
+    expect(out!.phases[0].goals).toHaveLength(3);
+    expect(out!.measurement.coreKpis).toHaveLength(6);
+  });
+
+  it('turns empty dependsOn into undefined and keeps real ones', async () => {
+    const { normalizeStrategy } = await import('./programStrategy');
+    const out = normalizeStrategy({
+      northStar: 'n', currentState: ['a', 'b'],
+      workstreams: [ws(1), ws(2), ws(3)], phases: [phase(1), phase(2)],
+      measurement: { cadence: 'c', coreKpis: ['a', 'b'] },
+    });
+    expect(out!.workstreams[0].initiatives[0].dependsOn).toBeUndefined();
+    expect(out!.workstreams[0].initiatives[1].dependsOn).toBe('x');
+  });
+
+  it('returns null when under the strict minimums (too few workstreams)', async () => {
+    const { normalizeStrategy } = await import('./programStrategy');
+    expect(normalizeStrategy({
+      northStar: 'n', currentState: ['a', 'b'], workstreams: [ws(1)], phases: [phase(1), phase(2)],
+      measurement: { cadence: 'c', coreKpis: ['a', 'b'] },
+    })).toBeNull();
+  });
+});
