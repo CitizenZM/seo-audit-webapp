@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, ArrowRight, Search, Loader2, FileX2, Sparkles } from 'lucide-react';
+import { BarChart3, ArrowRight, Search, Loader2, FileX2, Sparkles, Users } from 'lucide-react';
 import { getAudits } from '@/lib/history';
 
 interface AuditRow {
@@ -59,8 +59,14 @@ export default function ReportsPage() {
           <p className="text-[11px] sm:text-xs text-[var(--ink-3)] truncate">Every audit you&apos;ve run, ready to view or export</p>
         </div>
         <Link
+          href="/clients"
+          className="ml-auto flex items-center gap-1.5 h-10 sm:h-9 px-3 sm:px-3.5 rounded-lg text-[var(--ink)] border border-[var(--border)] text-sm font-semibold hover:bg-[var(--surface-2)] transition-all shrink-0"
+        >
+          <Users size={15} /> <span className="hidden sm:inline">Clients</span>
+        </Link>
+        <Link
           href="/"
-          className="ml-auto flex items-center gap-1.5 h-10 sm:h-9 px-3 sm:px-3.5 rounded-lg text-white text-sm font-semibold hover:brightness-105 transition-all shrink-0"
+          className="flex items-center gap-1.5 h-10 sm:h-9 px-3 sm:px-3.5 rounded-lg text-white text-sm font-semibold hover:brightness-105 transition-all shrink-0"
           style={{ background: 'var(--grad-brand)' }}
         >
           <Search size={15} /> <span className="hidden sm:inline">New Audit</span>

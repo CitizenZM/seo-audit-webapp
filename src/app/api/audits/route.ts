@@ -95,10 +95,22 @@ export async function POST(request: Request) {
 
   const competitorCount = (body.competitors ?? '').split(',').map((s) => s.trim()).filter(Boolean).length;
 
+  // Client account system: link this run to a seo_clients row when the
+  // domain matches one, so it shows up in that client's workspace. Best
+  // effort — a lookup failure should never block the audit from starting.
+  let clientId: string | null = null;
+  try {
+    const { data: client } = await db.from('seo_clients').select('id').eq('domain', domain).maybeSingle();
+    clientId = client?.id ?? null;
+  } catch (e) {
+    console.warn('Client lookup skipped:', e instanceof Error ? e.message : e);
+  }
+
   const { data: row, error: insertError } = await db
     .from('seo_audits')
     .insert({
       user_id: user?.id ?? null,
+      client_id: clientId,
       url: normalized,
       domain,
       competitors_requested: competitorCount,
