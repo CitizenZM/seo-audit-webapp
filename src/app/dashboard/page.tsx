@@ -10,6 +10,7 @@ import TopBar from './TopBar';
 import StatCard from './StatCard';
 import GeoCard from './GeoCard';
 import VisibilityCard from './VisibilityCard';
+import KeywordRankingsCard from './KeywordRankingsCard';
 import OptimizationPlanCard from './OptimizationPlanCard';
 import CitationsCard from './CitationsCard';
 import TrendsCard from './TrendsCard';
@@ -271,6 +272,8 @@ function DashboardContent() {
 
           {/* Claims accuracy — fact-check of what AI models say about the brand */}
           <ClaimsAccuracyCard claims={data.visibilityExtras?.claims ?? null} solution={data.sectionSolutions?.['claims-accuracy'] ?? null} />
+
+          <KeywordRankingsCard keywordRankings={data.keywordRankings ?? null} />
 
           {/* Citation audit — which domains AI models cite in this category */}
           {data.visibility?.citations?.length > 0 && (

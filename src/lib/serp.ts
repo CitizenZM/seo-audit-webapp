@@ -66,3 +66,80 @@ export async function fetchSerp(query: string): Promise<SerpResult | null> {
   if (!query) return null;
   return viaSerper(query);
 }
+
+/** Root domain (www-stripped) — used for loose domain-family matching below. */
+function rootDomain(domain: string): string {
+  return domain.replace(/^www\./, '').toLowerCase();
+}
+
+/**
+ * True when a SERP result domain should count as "the target" — handles
+ * subdomain variance in both directions (shop.example.com vs example.com).
+ */
+function domainMatches(resultDomain: string, targetDomain: string): boolean {
+  const r = rootDomain(resultDomain);
+  const t = rootDomain(targetDomain);
+  if (!r || !t) return false;
+  return r === t || r.endsWith(`.${t}`) || t.endsWith(`.${r}`);
+}
+
+export interface KeywordRanking {
+  keyword: string;
+  targetPosition: number | null;
+  topResults: { title: string; url: string; domain: string }[];
+  competitorPositions: Record<string, number | null>;
+}
+
+/**
+ * Real keyword rankings (#4 upgrade): looks up up to 5 non-brand keywords
+ * (from synthesis.keywordOpportunities) against live Google results via
+ * Serper, and reports the target's and each competitor's organic position
+ * for each — measured data, not an AI estimate. Returns [] gracefully when
+ * no API key is configured (dashboard hides the card).
+ */
+export async function fetchKeywordRankings(
+  keywords: string[],
+  targetDomain: string,
+  competitorDomains: string[],
+): Promise<KeywordRanking[]> {
+  const key = process.env.SERPER_API_KEY;
+  if (!key) {
+    console.warn('Keyword ranking lookup skipped: SERPER_API_KEY not configured.');
+    return [];
+  }
+  const queries = keywords.filter(Boolean).slice(0, 5);
+  if (!queries.length) return [];
+
+  const results = await Promise.allSettled(queries.map((q) => viaSerper(q)));
+
+  const rankings: KeywordRanking[] = [];
+  for (let i = 0; i < queries.length; i++) {
+    const r = results[i];
+    if (r.status !== 'fulfilled' || !r.value) continue;
+    const organic = r.value.organic;
+
+    let targetPosition: number | null = null;
+    const competitorPositions: Record<string, number | null> = {};
+    for (const domain of competitorDomains) competitorPositions[domain] = null;
+
+    organic.forEach((res, idx) => {
+      const position = idx + 1;
+      if (targetPosition === null && domainMatches(res.domain, targetDomain)) {
+        targetPosition = position;
+      }
+      for (const domain of competitorDomains) {
+        if (competitorPositions[domain] === null && domainMatches(res.domain, domain)) {
+          competitorPositions[domain] = position;
+        }
+      }
+    });
+
+    rankings.push({
+      keyword: queries[i],
+      targetPosition,
+      topResults: organic.slice(0, 5),
+      competitorPositions,
+    });
+  }
+  return rankings;
+}

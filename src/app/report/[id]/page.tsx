@@ -9,6 +9,7 @@ import OptimizationPlanCard from '../../dashboard/OptimizationPlanCard';
 import VisibilityCard from '../../dashboard/VisibilityCard';
 import GeoCard from '../../dashboard/GeoCard';
 import CitationsCard from '../../dashboard/CitationsCard';
+import KeywordRankingsCard from '../../dashboard/KeywordRankingsCard';
 import RadarChart from '../../dashboard/RadarChart';
 import ActionPlanBoard from '../../dashboard/ActionPlanBoard';
 import ContentBriefs from '../../dashboard/ContentBriefs';
@@ -186,6 +187,7 @@ export default function ReportPage() {
 
         <VisibilityCard visibility={data.visibility ?? null} domain={data.domain} />
         {data.visibility?.citations?.length > 0 && <CitationsCard citations={data.visibility.citations} domain={data.domain} />}
+        <KeywordRankingsCard keywordRankings={data.keywordRankings ?? null} />
         {data.geo && <GeoCard geo={data.geo} />}
 
         {data.synthesis?.keywordOpportunities && (

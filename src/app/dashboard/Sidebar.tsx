@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Zap, Search, Users, FileText, BarChart3, Settings, HelpCircle,
   Sparkles, Eye, Trophy, Quote, PenLine, UserRound, TrendingUp, Rocket, X,
-  Grid3x3, Heart, ShieldCheck, Link2, LineChart, ShoppingCart, Bot, FileCode2, Target,
+  Grid3x3, Building2, Heart, ShieldCheck, Link2, LineChart, ShoppingCart, Bot, FileCode2, Target,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -14,10 +14,11 @@ import type { LucideIcon } from 'lucide-react';
  * hidden fallback anchors for any card that returned null, so clicks always
  * land on the right spot even when a section has no data).
  */
-const GROUPS: { label: string | null; items: { id: string; label: string; icon: LucideIcon; soon?: boolean }[] }[] = [
+const GROUPS: { label: string | null; items: { id: string; label: string; icon: LucideIcon; soon?: boolean; href?: string }[] }[] = [
   {
     label: null,
     items: [
+      { id: 'clients', label: 'All clients', icon: Building2, href: '/clients' },
       { id: 'overview', label: 'Overview', icon: LayoutDashboard },
       { id: 'visibility', label: 'Visibility audit', icon: Eye },
     ],
@@ -69,7 +70,7 @@ const GROUPS: { label: string | null; items: { id: string; label: string; icon: 
   },
 ];
 
-const ALL_IDS = GROUPS.flatMap((g) => g.items.filter((i) => !i.soon).map((i) => i.id));
+const ALL_IDS = GROUPS.flatMap((g) => g.items.filter((i) => !i.soon && !i.href).map((i) => i.id));
 
 /**
  * Scrollspy: highlight the section nearest the top of the viewport. The old
@@ -121,7 +122,7 @@ export default function Sidebar({
             {group.label && (
               <div className="px-3 pb-1.5 text-[10px] uppercase tracking-widest font-bold text-[var(--ink-3)]">{group.label}</div>
             )}
-            {group.items.map(({ id, label, icon: Icon, soon }) => {
+            {group.items.map(({ id, label, icon: Icon, soon, href }) => {
               const isActive = id === spied;
               if (soon) {
                 return (
@@ -135,7 +136,7 @@ export default function Sidebar({
               return (
                 <a
                   key={id}
-                  href={`#${id}`}
+                  href={href ?? `#${id}`}
                   onClick={onClose}
                   className={`flex items-center gap-3 px-3 py-2.5 lg:py-2 rounded-xl text-sm font-medium transition-all min-h-11 lg:min-h-0 ${
                     isActive
