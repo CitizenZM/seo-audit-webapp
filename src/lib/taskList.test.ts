@@ -127,3 +127,52 @@ describe('reconcileTasks', () => {
     expect(plan.verifyDone).toEqual([]);
   });
 });
+
+describe('AI suggestions overlapping deterministic tasks are dropped', () => {
+  it('drops an AI section task that restates a GEO check (FAQ duplicate seen on us.tcl.com)', () => {
+    const tasks = buildTaskList({
+      geo: { recommendations: ['Add a FAQ / Q&A section with question-style H2/H3 headings — LLMs preferentially quote clean question→answer blocks.'] },
+      sectionSolutions: {
+        geo: { problems: ['p'], solutions: [
+          { title: 'Implement FAQ/Q&A Section for LLMs', steps: ['a'], effort: 'medium', impact: 'high' },
+          { title: 'Earn citations on review sites', steps: ['a'], effort: 'medium', impact: 'high' },
+        ], roadmap: [] },
+      },
+    });
+    const titles = tasks.map((t) => t.title);
+    expect(titles.some((t) => /Implement FAQ/.test(t))).toBe(false);
+    expect(titles).toContain('Earn citations on review sites');
+  });
+
+  it('keeps AI tasks that merely share a generic word', () => {
+    const tasks = buildTaskList({
+      siteCrawl: { summary: { pagesCrawled: 5 }, issues: [{ id: 'MISSING_META', severity: 'high', title: 'Pages missing a meta description', affectedUrls: [], count: 3, fix: 'x' }] },
+      sectionSolutions: { content: { problems: ['p'], solutions: [{ title: 'Publish buying-guide pages', steps: ['a'], effort: 'low', impact: 'high' }], roadmap: [] } },
+    });
+    expect(tasks.map((t) => t.title)).toContain('Publish buying-guide pages');
+  });
+});
+
+describe('dedupe patterns found on real us.tcl.com data', () => {
+  it('keeps the strategy initiative when a section solution has the same title', () => {
+    const tasks = buildTaskList({
+      sectionSolutions: { technical: { problems: ['p'], solutions: [{ title: 'Optimize Core On-Page SEO Elements', steps: ['a'], effort: 'low', impact: 'high' }], roadmap: [] } },
+      programStrategy: { workstreams: [{ name: 'Technical', objective: 'o', kpi: 'k', initiatives: [
+        { title: 'Optimize Core On-Page SEO Elements', priority: 'P0', effort: 'low', impact: 'high', timeframe: 'W1', successMetric: 'm' },
+      ] }] },
+    });
+    const same = tasks.filter((t) => t.title === 'Optimize Core On-Page SEO Elements');
+    expect(same).toHaveLength(1);
+    expect(same[0].source).toBe('strategy');
+  });
+
+  it('drops a short AI title whose only distinctive word matches a deterministic task', () => {
+    const tasks = buildTaskList({
+      geo: { recommendations: ['Add a FAQ / Q&A section with question-style H2/H3 headings.'] },
+      programStrategy: { workstreams: [{ name: 'GEO', objective: 'o', kpi: 'k', initiatives: [
+        { title: 'Implement a Geo-Specific FAQ Section', priority: 'P0', effort: 'low', impact: 'high', timeframe: 'W1', successMetric: 'm' },
+      ] }] },
+    });
+    expect(tasks.some((t) => /Geo-Specific FAQ/.test(t.title))).toBe(false);
+  });
+});
