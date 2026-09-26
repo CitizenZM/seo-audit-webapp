@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Zap, Search, Users, FileText, BarChart3, Settings, HelpCircle,
   Sparkles, Eye, Trophy, Quote, PenLine, UserRound, TrendingUp, Rocket, X,
-  Grid3x3, Building2, Heart, ShieldCheck, Link2, LineChart, ShoppingCart, Bot, FileCode2, Target,
+  Grid3x3, Building2, Heart, ShieldCheck, Link2, LineChart, ShoppingCart, Bot, FileCode2, Target, ListChecks,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -53,6 +53,7 @@ const GROUPS: { label: string | null; items: { id: string; label: string; icon: 
     label: 'SEO',
     items: [
       { id: 'technical', label: 'Technical audit', icon: Zap },
+      { id: 'page-issues', label: 'Page issues', icon: ListChecks },
       { id: 'keywords', label: 'Keywords', icon: Search },
       { id: 'competitors', label: 'Competitor gap', icon: Users },
       { id: 'content', label: 'Content plan', icon: FileText },

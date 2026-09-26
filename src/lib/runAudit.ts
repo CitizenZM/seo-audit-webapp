@@ -1,4 +1,6 @@
 import * as cheerio from 'cheerio';
+import { crawlSite as runSiteCrawl } from '@/lib/siteCrawler';
+import { detectSiteIssues } from '@/lib/siteIssues';
 import { launchBrowser } from '@/lib/browser';
 import { generateSynthesis } from '@/lib/synthesis';
 import { fetchSerp, fetchKeywordRankings } from '@/lib/serp';
@@ -234,134 +236,95 @@ export function normalizeUrl(raw: string): string {
 }
 
 /**
- * Site-level crawl (#3). Reads sitemap.xml (or falls back to homepage internal
- * links), samples up to MAX_PAGES URLs, and aggregates on-page health across
- * them so the audit reflects the whole site, not just the homepage. Uses plain
- * fetch (fast, no per-page PageSpeed) and is fully best-effort — any failure
- * just shrinks the sample rather than aborting the audit.
+ * Site-level crawl (#3). Real sitemap-driven crawler (src/lib/siteCrawler.ts):
+ * reads robots.txt, recurses sitemap indexes, discovers additional pages via
+ * on-page links, and captures per-page SEO signals across up to 150 pages
+ * (bounded concurrency + a wall-clock budget so it always fits the route's
+ * time budget alongside the AI stages). Page-level issue rules live in
+ * src/lib/siteIssues.ts. Fully best-effort — any failure just shrinks the
+ * result rather than aborting the audit.
+ *
+ * Backward compat: every field the dashboard/actionProposal previously read
+ * off the old 8-page sample (`discovered`, `pagesAnalyzed`, `avgWordCount`,
+ * `pagesMissingTitle`, `pagesMissingMeta`, `pagesMissingH1`,
+ * `pagesMultipleH1`, `thinContentPages`, `sample[]`) is preserved with the
+ * same meaning and type, now computed from the full crawl. New fields:
+ * `pages` (compact per-page rows, capped 150), `issues`, `summary`.
  */
-/** URLs that aren't real HTML pages and would pollute the page-health sample. */
-function looksLikeHtmlPage(url: string): boolean {
-  try {
-    const path = new URL(url).pathname.toLowerCase();
-    return !/\.(xml|json|txt|md|markdown|csv|ya?ml|rss|atom|jpe?g|png|gif|webp|svg|pdf|css|js|ico|mp4|webm|xml\.gz|gz)$/.test(path);
-  } catch {
-    return false;
-  }
-}
-
-/** Fetch a sitemap and return its <loc> entries plus whether it's an index. */
-async function readSitemap(url: string): Promise<{ locs: string[]; isIndex: boolean }> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) return { locs: [], isIndex: false };
-  const xml = await res.text();
-  const $x = cheerio.load(xml, { xmlMode: true });
-  // A sitemap index wraps child sitemaps in <sitemap>; a normal sitemap uses <url>.
-  const isIndex = $x('sitemapindex').length > 0 || $x('sitemap > loc').length > 0;
-  const locs: string[] = [];
-  $x('loc').each((_, el) => {
-    const loc = $x(el).text().trim();
-    if (loc) locs.push(loc);
-  });
-  return { locs, isIndex };
-}
-
 async function crawlSite(origin: string, homepageHtml: string, targetUrl: string) {
-  const MAX_PAGES = 8;
-  const domain = new URL(origin).hostname;
-  const urls = new Set<string>();
+  void homepageHtml; // no longer needed — the new crawler re-fetches every page it visits
+  const outcome = await runSiteCrawl(targetUrl, {
+    maxPages: 150,
+    concurrency: 4,
+    pageTimeoutMs: 8000,
+    budgetMs: 70000,
+  });
 
-  // 1. Prefer sitemap.xml — recursing one level into a sitemap index so we
-  //    collect actual page URLs, not the child-sitemap .xml files themselves.
-  //    (Without this, sites like Shopify whose /sitemap.xml is an index got
-  //    their nested sitemap XML files sampled as if they were pages — every
-  //    one reads as h1=0/no-meta, badly skewing the "pages missing …" stats.)
-  try {
-    const root = await readSitemap(`${origin}/sitemap.xml`);
-    if (root.isIndex) {
-      // Fetch a handful of child sitemaps and gather their page URLs.
-      const children = root.locs.filter((l) => looksLikeHtmlPage(l) === false).slice(0, 5);
-      const childResults = await Promise.allSettled(children.map((c) => readSitemap(c)));
-      for (const r of childResults) {
-        if (r.status === 'fulfilled') {
-          for (const loc of r.value.locs) {
-            if (looksLikeHtmlPage(loc)) urls.add(loc);
-            if (urls.size >= MAX_PAGES * 3) break;
-          }
-        }
-      }
-    } else {
-      for (const loc of root.locs) {
-        if (looksLikeHtmlPage(loc)) urls.add(loc);
-      }
-    }
-  } catch {
-    /* no sitemap — fall back to links below */
-  }
+  const { issues, summary } = detectSiteIssues(outcome.pages);
+  const okPages = outcome.pages.filter((p) => p.status < 400);
 
-  // 2. Fall back to / supplement with internal links from the homepage
-  if (urls.size < MAX_PAGES) {
-    const $h = cheerio.load(homepageHtml);
-    $h('a').each((_, el) => {
-      const href = $h(el).attr('href');
-      if (!href) return;
-      try {
-        const u = new URL(href, targetUrl);
-        if (u.hostname === domain && looksLikeHtmlPage(u.href)) urls.add(u.href.split('#')[0]);
-      } catch { /* ignore */ }
-    });
-  }
+  // Question-style headings aren't captured by the new crawler (kept lean for
+  // Supabase JSON storage), so the per-page aiScore below omits that +10 term
+  // and rescales the remaining weights to still sum to 100.
+  const compactPages = outcome.pages.slice(0, 150).map((p) => {
+    const aiScore = Math.round(
+      (p.hasJsonLd ? 34 : 0) +
+      (p.h1Count === 1 ? 22 : 0) +
+      (p.metaDescriptionLength >= 50 ? 22 : 0) +
+      (p.wordCount >= 300 ? 22 : Math.min(22, (p.wordCount / 300) * 22)),
+    );
+    return {
+      url: p.url,
+      status: p.status,
+      title: p.title,
+      titleLength: p.titleLength,
+      metaDescriptionLength: p.metaDescriptionLength,
+      h1Count: p.h1Count,
+      wordCount: p.wordCount,
+      canonical: p.canonical,
+      noindex: p.noindex,
+      hasJsonLd: p.hasJsonLd,
+      schemaTypes: p.schemaTypes,
+      imageCount: p.imageCount,
+      imagesMissingAlt: p.imagesMissingAlt,
+      internalLinkCount: p.internalLinkCount,
+      externalLinkCount: p.externalLinkCount,
+      responseTimeMs: p.responseTimeMs,
+      aiScore: p.status < 400 ? aiScore : undefined,
+    };
+  });
 
-  const sample = [...urls].filter((u) => u !== targetUrl).slice(0, MAX_PAGES);
+  const analyzed = okPages.length;
 
-  const pages = await Promise.allSettled(
-    sample.map(async (url) => {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SEOAuditBot/1.0)' },
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const $ = cheerio.load(await res.text());
-      // Same head>title + SVG-strip discipline as the main scrape (see above).
-      const title = ($('head > title').first().text() || $('title').first().text()).replace(/\s+/g, ' ').trim();
-      const metaDesc = ($('meta[name="description"]').attr('content') || '').replace(/\s+/g, ' ').trim();
-      const hasJsonLd = $('script[type="application/ld+json"]').length > 0;
-      $('script, style, noscript, svg').remove();
-      const h1Count = $('h1').length;
-      const wordCount = ($('body').text().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)).length;
-      // Question-style headings — the content shape LLMs extract most cleanly.
-      const qHeadings = $('h2, h3').filter((_, el) =>
-        /^(how|what|why|when|where|which|who|can|does|do|is|are|should|will)\b|\?\s*$/i.test($(el).text().trim()),
-      ).length;
-      // Per-page AI Optimization score (Gumshoe-style page-by-page audit):
-      // machine-readable facts, one clear H1, described in meta, substantive
-      // content, and answer-shaped headings.
-      const aiScore = Math.round(
-        (hasJsonLd ? 30 : 0) +
-        (h1Count === 1 ? 20 : 0) +
-        (metaDesc.length >= 50 ? 20 : 0) +
-        (wordCount >= 300 ? 20 : Math.min(20, (wordCount / 300) * 20)) +
-        (qHeadings > 0 ? 10 : 0),
-      );
-      return { url, title, titleLen: title.length, metaLen: metaDesc.length, h1Count, wordCount, aiScore };
-    }),
-  );
-
-  const ok = pages
-    .filter((p): p is PromiseFulfilledResult<{ url: string; title: string; titleLen: number; metaLen: number; h1Count: number; wordCount: number; aiScore: number }> => p.status === 'fulfilled')
-    .map((p) => p.value);
-
-  const analyzed = ok.length;
   return {
-    discovered: urls.size,
+    // --- backward-compatible fields (same meaning/type as before) ---
+    discovered: outcome.discoveredCount,
     pagesAnalyzed: analyzed,
-    avgWordCount: analyzed ? Math.round(ok.reduce((s, p) => s + p.wordCount, 0) / analyzed) : 0,
-    pagesMissingTitle: ok.filter((p) => !p.title).length,
-    pagesMissingMeta: ok.filter((p) => p.metaLen === 0).length,
-    pagesMissingH1: ok.filter((p) => p.h1Count === 0).length,
-    pagesMultipleH1: ok.filter((p) => p.h1Count > 1).length,
-    thinContentPages: ok.filter((p) => p.wordCount < 300).length,
-    sample: ok.map((p) => ({ url: p.url, title: p.title || '(missing)', words: p.wordCount, h1: p.h1Count, hasMeta: p.metaLen > 0, aiScore: p.aiScore })),
+    avgWordCount: analyzed ? Math.round(okPages.reduce((s, p) => s + p.wordCount, 0) / analyzed) : 0,
+    pagesMissingTitle: okPages.filter((p) => !p.title).length,
+    pagesMissingMeta: okPages.filter((p) => p.metaDescriptionLength === 0).length,
+    pagesMissingH1: okPages.filter((p) => p.h1Count === 0).length,
+    pagesMultipleH1: okPages.filter((p) => p.h1Count > 1).length,
+    thinContentPages: okPages.filter((p) => p.wordCount < 300).length,
+    sample: okPages.slice(0, 8).map((p) => ({
+      url: p.url,
+      title: p.title || '(missing)',
+      words: p.wordCount,
+      h1: p.h1Count,
+      hasMeta: p.metaDescriptionLength > 0,
+      aiScore: compactPages.find((c) => c.url === p.url)?.aiScore,
+    })),
+
+    // --- new fields ---
+    pages: compactPages,
+    issues,
+    summary,
+    robotsUrl: outcome.robotsUrl,
+    sitemapUrl: outcome.sitemapUrl,
+    warnings: outcome.warnings,
+    timedOut: outcome.timedOut,
+    rateLimited: outcome.rateLimited,
+    botBlocked: outcome.botBlocked,
   };
 }
 

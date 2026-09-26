@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
     "/api/analyze": ["./node_modules/@sparticuz/chromium/bin/**"],
     "/api/audits": ["./node_modules/@sparticuz/chromium/bin/**"],
     "/api/cron/reaudit": ["./node_modules/@sparticuz/chromium/bin/**"],
+    "/api/jobs/run": ["./node_modules/@sparticuz/chromium/bin/**"],
   },
 };
 

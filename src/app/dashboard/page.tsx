@@ -33,6 +33,7 @@ import CommerceReadinessCard from './CommerceReadinessCard';
 import VisibilityTrendCard from './VisibilityTrendCard';
 import CrawlerAnalyticsCard from './CrawlerAnalyticsCard';
 import ActivationCard from './ActivationCard';
+import PageIssuesCard from './PageIssuesCard';
 
 /** (B6) new URL() throws on a malformed value — never let a bad ?url= crash the page. */
 function safeHostname(url: string): string {
@@ -534,6 +535,11 @@ function DashboardContent() {
               </div>
             </div>
           )}
+
+          {/* Page-level issues from the sitemap-driven site crawl */}
+          <div className="md:col-span-2">
+            <PageIssuesCard siteCrawl={data.siteCrawl} />
+          </div>
 
           {/* Live SERP Intelligence (#4) */}
           {data.serp && data.serp.organic?.length > 0 && (

@@ -1,5 +1,6 @@
 import { NextResponse, after } from 'next/server';
-import { runAudit, UnsafeUrlError, normalizeUrl, type Stage } from '@/lib/runAudit';
+import { runAudit, UnsafeUrlError, normalizeUrl } from '@/lib/runAudit';
+import { createAuditJob, executeAuditJob } from '@/lib/auditJobs';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin';
 import { supabaseServerSession } from '@/lib/supabase/server';
@@ -93,75 +94,13 @@ export async function POST(request: Request) {
   const user = await supabaseServerSession();
   const db = supabaseAdmin();
 
-  const competitorCount = (body.competitors ?? '').split(',').map((s) => s.trim()).filter(Boolean).length;
-
-  // Client account system: link this run to a seo_clients row when the
-  // domain matches one, so it shows up in that client's workspace. Best
-  // effort — a lookup failure should never block the audit from starting.
-  let clientId: string | null = null;
-  try {
-    const { data: client } = await db.from('seo_clients').select('id').eq('domain', domain).maybeSingle();
-    clientId = client?.id ?? null;
-  } catch (e) {
-    console.warn('Client lookup skipped:', e instanceof Error ? e.message : e);
-  }
-
-  const { data: row, error: insertError } = await db
-    .from('seo_audits')
-    .insert({
-      user_id: user?.id ?? null,
-      client_id: clientId,
-      url: normalized,
-      domain,
-      competitors_requested: competitorCount,
-      status: 'queued',
-      stage: 'queued',
-    })
-    .select('id')
-    .single();
-
-  if (insertError || !row) {
-    console.error('Failed to create audit job:', insertError);
-    return NextResponse.json({ error: 'Failed to create audit job' }, { status: 500 });
-  }
-
-  const auditId = row.id as string;
+  const auditId = await createAuditJob(db, { url: normalized, domain, competitors: body.competitors, userId: user?.id ?? null });
+  if (!auditId) return NextResponse.json({ error: 'Failed to create audit job' }, { status: 500 });
 
   // Run the actual work after the response is sent — the function invocation
   // stays alive (up to maxDuration) while this executes, so the progress
   // written to seo_audits is real, not simulated.
-  after(async () => {
-    const updateStage = async (stage: Stage) => {
-      await db.from('seo_audits').update({ stage, status: 'running', updated_at: new Date().toISOString() }).eq('id', auditId);
-    };
-    try {
-      await db.from('seo_audits').update({ status: 'running', stage: 'crawl' }).eq('id', auditId);
-      const result = await runAudit(normalized, body.competitors, updateStage);
-      await db
-        .from('seo_audits')
-        .update({
-          status: 'done',
-          stage: 'done',
-          overall_score: result.data.overallScore,
-          geo_score: result.data.geoScore,
-          visibility_pct: result.data.visibilityPct,
-          projected_score: result.data.optimizationPlan?.projectedOverallScore ?? null,
-          mobile_speed_score: result.data.technical.mobileSpeedScore,
-          result_json: result,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', auditId);
-    } catch (error) {
-      await db
-        .from('seo_audits')
-        .update({
-          status: 'error',
-          error_message: error instanceof Error ? error.message : 'Unknown error',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', auditId);
-    }
-  });
+  after(() => executeAuditJob(db, auditId, normalized, body.competitors));
 
   return NextResponse.json({ id: auditId, status: 'queued' });
 }

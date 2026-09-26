@@ -1,8 +1,6 @@
 {
   "crons": [
-    {
-      "path": "/api/cron/reaudit",
-      "schedule": "0 9 * * 1"
-    }
+    { "path": "/api/cron/reaudit", "schedule": "0 9 * * 1" },
+    { "path": "/api/cron/digest", "schedule": "0 11 * * 1" }
   ]
 }
