@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { resolveCompatEngines, planProbes, withRetry, limiter } from './probeEngines';
 import { activeProvider, aiText, extractJson, cliAvailable, OPENAI_MODEL } from '@/lib/ai';
 
 /**
@@ -232,6 +233,29 @@ async function buildProbeTargets(): Promise<ProbeTarget[]> {
     });
   }
 
+  // Config-driven OpenAI-compatible engines (OpenRouter free models, Matrix
+  // gateway) — see probeEngines.ts. Each gets its own concurrency limiter and
+  // 429/5xx retry, since free tiers throttle hard.
+  for (const eng of resolveCompatEngines(process.env)) {
+    const client = new OpenAI({ apiKey: eng.apiKey, baseURL: eng.baseURL, defaultHeaders: eng.headers, timeout: 90_000, maxRetries: 0 });
+    const run = limiter(eng.concurrency);
+    targets.push({
+      model: eng.label,
+      ask: (prompt) =>
+        run(() =>
+          withRetry(async () => {
+            const r = await client.chat.completions.create({
+              model: eng.model,
+              max_tokens: 1200,
+              messages: [{ role: 'system', content: PROBE_SYSTEM }, { role: 'user', content: prompt }],
+              ...(eng.extraBody ?? {}),
+            } as Parameters<typeof client.chat.completions.create>[0]);
+            return (r as { choices: { message?: { content?: string | null } }[] }).choices[0]?.message?.content ?? '';
+          }),
+        ),
+    });
+  }
+
   // Local subscription CLI — only when no API provider is configured, so a
   // production deployment (which has no CLI) is never silently half-probed.
   if (targets.length === 0 && cliAvailable()) {
@@ -437,7 +461,7 @@ export async function analyzeVisibility(input: VisibilityInput): Promise<Visibil
   const target = targetCandidates(input.domain, input.title);
 
   const settled = await Promise.allSettled(
-    distributeAcrossTargets(plan, targets).map(async ({ target: t, prompt: p }): Promise<PromptResult & { raw: string }> => {
+    planProbes(plan, targets).map(async ({ target: t, prompt: p }): Promise<PromptResult & { raw: string }> => {
       const raw = await t.ask(p.prompt);
       const rawSources = parseList(raw, 'SOURCES');
       return {

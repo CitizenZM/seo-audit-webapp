@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isSupabaseConfigured } from '@/lib/supabase/admin';
+import { resolveCompatEngines } from '@/lib/probeEngines';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,7 @@ export async function GET() {
     has('ANTHROPIC_API_KEY') && 'anthropic',
     has('PERPLEXITY_API_KEY') && 'perplexity',
     has('AGNES_API_KEY') && 'agnes',
+    ...resolveCompatEngines(process.env).map((e) => e.label),
   ].filter(Boolean);
 
   return NextResponse.json({
