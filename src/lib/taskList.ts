@@ -47,6 +47,39 @@ const GEO_SECTIONS = new Set([
 const slug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'item';
 
+/** Words too generic to signal that two tasks are the same work item. */
+const GENERIC = new Set([
+  'the', 'and', 'for', 'with', 'your', 'from', 'into', 'add', 'implement', 'fix', 'create', 'improve',
+  'optimize', 'optimise', 'ensure', 'build', 'launch', 'update', 'use', 'page', 'pages', 'site', 'website',
+  'seo', 'geo', 'content', 'all', 'more', 'new', 'key', 'core', 'section', 'sections', 'missing',
+  'specific', 'targeted', 'comprehensive', 'strategy', 'develop', 'enhance', 'strengthen',
+]);
+
+/** Distinctive tokens of a task title ("Q&A" → "qa", drops generic/short words). */
+export function titleTokens(title: string): Set<string> {
+  const words = title
+    .toLowerCase()
+    .replace(/q\s*&\s*a/g, 'qa')
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !GENERIC.has(w));
+  return new Set(words.map((w) => (w.endsWith('s') && w.length > 4 ? w.slice(0, -1) : w)));
+}
+
+/**
+ * An AI suggestion restates a deterministic task when most of its distinctive
+ * words appear in that task's title (≥2 shared and ≥60% of the suggestion).
+ * The deterministic task wins — it is auto-verifiable.
+ */
+function restates(aiTitle: string, detTokens: Set<string>[]): boolean {
+  const ai = titleTokens(aiTitle);
+  if (ai.size === 0) return false;
+  return detTokens.some((det) => {
+    let shared = 0;
+    for (const w of ai) if (det.has(w)) shared++;
+    return shared >= Math.min(2, ai.size) && shared / ai.size >= 0.6;
+  });
+}
+
 const severityToPriority = (s: string): Priority => (s === 'critical' ? 'P0' : s === 'high' ? 'P1' : 'P2');
 const isLevel = (v: unknown): v is Level => v === 'low' || v === 'medium' || v === 'high';
 
@@ -153,8 +186,19 @@ export function buildTaskList(data: any): TaskDraft[] {
     }
   }
 
+  const all = [...out.values()];
+  const detTokens = all.filter((t) => t.autoVerifiable).map((t) => titleTokens(`${t.title} ${t.detail ?? ''}`));
+  // Strategy initiatives often reuse a section solution's title verbatim —
+  // keep the strategy copy (it carries priority + success metric).
+  const strategyTitles = new Set(all.filter((t) => t.source === 'strategy').map((t) => slug(t.title)));
+  const deduped = all.filter(
+    (t) =>
+      t.autoVerifiable ||
+      (!restates(t.title, detTokens) && !(t.source === 'section' && strategyTitles.has(slug(t.title)))),
+  );
+
   const order: Record<Priority, number> = { P0: 0, P1: 1, P2: 2 };
-  return [...out.values()].sort((a, b) => order[a.priority] - order[b.priority]);
+  return deduped.sort((a, b) => order[a.priority] - order[b.priority]);
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
