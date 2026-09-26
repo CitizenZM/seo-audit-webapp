@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { applyFix, detectFixNeeds, rollbackFix, type FixField, type FixRecord, type ShopifyPort } from '@/lib/fixEngine';
 import { buildProposals, draftSeoCopy } from '@/lib/fixProposals';
-import { credsForClient, fetchProducts, shopifyPort, tokenEnvName } from '@/lib/shopify';
+import { clientIdEnvName, clientSecretEnvName, fetchProducts, hasShopifyCredentials, resolveCreds, shopifyPort, tokenEnvName } from '@/lib/shopify';
 
 /**
  * Persistence + orchestration for the implementation queue (seo_fixes).
@@ -30,8 +30,8 @@ export function connection(client: ClientRow) {
   return {
     slug: client.slug,
     platform: client.platform,
-    connected: client.platform === 'shopify' && Boolean(credsForClient(client)),
-    tokenEnv: tokenEnvName(client.slug),
+    connected: client.platform === 'shopify' && hasShopifyCredentials(client),
+    tokenEnv: `${clientIdEnvName(client.slug)} + ${clientSecretEnvName(client.slug)} (or legacy ${tokenEnvName(client.slug)})`,
   };
 }
 
@@ -42,8 +42,8 @@ export async function proposeForClient(
   client: ClientRow,
   deps: { fetch?: typeof fetchProducts; draft?: typeof draftSeoCopy } = {},
 ): Promise<{ proposed: number; skipped: number; scanned: number }> {
-  const creds = credsForClient(client);
-  if (!creds) throw new Error(`Store not connected: set ${tokenEnvName(client.slug)} and shop_domain`);
+  const creds = await resolveCreds(client);
+  if (!creds) throw new Error(`Store not connected: set ${clientIdEnvName(client.slug)} + ${clientSecretEnvName(client.slug)} and shop_domain`);
 
   const products = await (deps.fetch ?? fetchProducts)(creds, { limit: 250 });
   const needs = detectFixNeeds(products);
@@ -114,7 +114,7 @@ export async function actOnFix(
   let port = opts.port;
   if (!port) {
     const { data: client } = await db.from('seo_clients').select('id, slug, name, domain, platform, shop_domain').eq('id', fix.client_id).maybeSingle();
-    const creds = client ? credsForClient(client as ClientRow) : null;
+    const creds = client ? await resolveCreds(client as ClientRow).catch(() => null) : null;
     if (!creds) return { error: 'Store not connected', status: 412 as const };
     port = shopifyPort(creds);
   }
