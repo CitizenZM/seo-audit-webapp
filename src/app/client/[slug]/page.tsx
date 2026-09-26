@@ -189,7 +189,7 @@ export default function ClientWorkspacePage() {
                   </>
                 );
                 return a.status === 'done' ? (
-                  <Link key={a.id} href={`/report/${a.id}`} className="card p-3 flex items-center gap-3 hover:border-[var(--brand)]/30 transition-colors">
+                  <Link key={a.id} href={a.status === 'done' ? `/dashboard?id=${a.id}` : `/report/${a.id}`} className="card p-3 flex items-center gap-3 hover:border-[var(--brand)]/30 transition-colors">
                     {inner}
                   </Link>
                 ) : (
