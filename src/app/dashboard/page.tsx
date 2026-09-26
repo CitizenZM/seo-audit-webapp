@@ -48,6 +48,9 @@ function safeHostname(url: string): string {
 function DashboardContent() {
   const searchParams = useSearchParams();
   const targetUrl = searchParams.get('url');
+  // ?id=<auditId> opens a stored (or still-running) audit without starting a
+  // new run — used by client workspaces and scheduled-audit links.
+  const auditIdParam = searchParams.get('id');
   const competitorsParam = searchParams.get('competitors');
   
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,7 +66,7 @@ function DashboardContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    if (!targetUrl) return;
+    if (!targetUrl && !auditIdParam) return;
     let cancelled = false;
     let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -144,28 +147,31 @@ function DashboardContent() {
       }
     }
 
-    start();
+    if (auditIdParam) poll(auditIdParam);
+    else start();
     return () => {
       cancelled = true;
       if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [targetUrl, competitorsParam]);
+  }, [targetUrl, competitorsParam, auditIdParam]);
 
-  if (!targetUrl) {
+  if (!targetUrl && !auditIdParam) {
     return <div className="p-10 text-center text-red-400">No URL provided</div>;
   }
+  // In ?id= mode the URL is only known once the stored audit loads.
+  const shownUrl = targetUrl ?? data?.url ?? '';
 
   if (loading) {
     return (
       <div className="flex min-h-screen bg-[var(--bg)]">
-        <Sidebar active="overview" domain={safeHostname(targetUrl)} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar active="overview" domain={(targetUrl ? safeHostname(targetUrl) : 'stored audit')} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 min-w-0">
-          <TopBar url={targetUrl} onMenuClick={() => setSidebarOpen(true)} />
+          <TopBar url={shownUrl} onMenuClick={() => setSidebarOpen(true)} />
           <main className="p-4 sm:p-6 max-w-[1200px] mx-auto">
             <div className="mb-4">
               <div className="text-sm text-[var(--ink-2)] flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 rounded-full bg-[var(--brand)] animate-pulse shrink-0" />
-                <span className="truncate">Running analysis engine — {safeHostname(targetUrl)}</span>
+                <span className="truncate">Running analysis engine — {(targetUrl ? safeHostname(targetUrl) : 'stored audit')}</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {[
