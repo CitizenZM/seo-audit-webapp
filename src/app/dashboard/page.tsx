@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Gauge, Search, Sparkles } from 'lucide-react';
 import Explainer from './Explainer';
 import ProgramStrategyCard from './ProgramStrategyCard';
+import TaskListCard from './TaskListCard';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import StatCard from './StatCard';
@@ -33,6 +34,7 @@ import CommerceReadinessCard from './CommerceReadinessCard';
 import VisibilityTrendCard from './VisibilityTrendCard';
 import CrawlerAnalyticsCard from './CrawlerAnalyticsCard';
 import ActivationCard from './ActivationCard';
+import PageIssuesCard from './PageIssuesCard';
 
 /** (B6) new URL() throws on a malformed value — never let a bad ?url= crash the page. */
 function safeHostname(url: string): string {
@@ -535,6 +537,11 @@ function DashboardContent() {
             </div>
           )}
 
+          {/* Page-level issues from the sitemap-driven site crawl */}
+          <div className="md:col-span-2">
+            <PageIssuesCard siteCrawl={data.siteCrawl} />
+          </div>
+
           {/* Live SERP Intelligence (#4) */}
           {data.serp && data.serp.organic?.length > 0 && (
             <div className="md:col-span-2 card p-4 sm:p-6">
@@ -649,6 +656,8 @@ function DashboardContent() {
           </section>
 
           {/* Action Plan Board & Content Calendar */}
+          <TaskListCard domain={data.domain} auditData={data} />
+
           <ProgramStrategyCard strategy={data.programStrategy ?? null} />
 
           <section id="reports" className="flex flex-col gap-5 scroll-mt-20">

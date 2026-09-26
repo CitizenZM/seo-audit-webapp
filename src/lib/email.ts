@@ -70,3 +70,58 @@ export async function sendReportEmail(input: ReportEmailInput): Promise<{ ok: bo
     return { ok: false, error: e instanceof Error ? e.message : 'send failed' };
   }
 }
+
+export interface DigestEmailInput {
+  to: string[];
+  rows: {
+    domain: string;
+    latest: { overall: number | null; geo: number | null; visibility: number | null; at: string } | null;
+    delta: { overall: number | null; geo: number | null; visibility: number | null };
+    alert: string | null;
+  }[];
+  clientsUrl: string;
+}
+
+/** Weekly all-clients digest (operator-facing). Same graceful contract as sendReportEmail. */
+export async function sendDigestEmail(input: DigestEmailInput): Promise<{ ok: boolean; error?: string }> {
+  if (!process.env.RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY not configured' };
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  const fmt = (v: number | null, suffix = '') => (v == null ? '—' : `${v}${suffix}`);
+  const d = (v: number | null) =>
+    v == null ? '' : v > 0 ? ` <span style="color:#16a34a">▲${v}</span>` : v < 0 ? ` <span style="color:#ef4444">▼${Math.abs(v)}</span>` : ' <span style="color:#8a90a0">±0</span>';
+  const alerts = input.rows.filter((r) => r.alert).length;
+
+  const rowsHtml = input.rows
+    .map(
+      (r) => `<tr>
+        <td style="padding:8px;border-bottom:1px solid #eceef2;font-weight:600">${escapeHtml(r.domain)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eceef2">${fmt(r.latest?.overall ?? null)}${d(r.delta.overall)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eceef2">${fmt(r.latest?.geo ?? null)}${d(r.delta.geo)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eceef2">${fmt(r.latest?.visibility ?? null, '%')}${d(r.delta.visibility)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eceef2;color:#ef4444">${r.alert ? escapeHtml(r.alert) : ''}</td>
+      </tr>`,
+    )
+    .join('');
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM,
+      to: input.to,
+      subject: `Weekly SEO/GEO digest — ${input.rows.length} clients${alerts ? `, ${alerts} alert${alerts > 1 ? 's' : ''}` : ''}`,
+      html: `<div style="font-family:system-ui,sans-serif;max-width:720px;margin:0 auto;color:#14151a">
+        <h2 style="color:#16a34a;margin-bottom:4px">Weekly SEO / GEO digest</h2>
+        <p style="color:#5b6170;margin-top:0">Week-over-week change per client (SEO score / GEO readiness / AI visibility).</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+          <tr style="text-align:left;color:#8a90a0;font-size:12px;text-transform:uppercase">
+            <th style="padding:8px">Client</th><th style="padding:8px">SEO</th><th style="padding:8px">GEO</th><th style="padding:8px">AI vis.</th><th style="padding:8px">Alert</th>
+          </tr>${rowsHtml}
+        </table>
+        <p style="margin-top:20px"><a href="${escapeHtml(input.clientsUrl)}" style="color:#16a34a;font-weight:600">Open client workspaces →</a></p>
+      </div>`,
+    });
+    return error ? { ok: false, error: error.message } : { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'send failed' };
+  }
+}

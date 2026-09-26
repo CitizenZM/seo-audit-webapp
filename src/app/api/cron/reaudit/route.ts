@@ -1,121 +1,79 @@
 import { NextResponse } from 'next/server';
-import { sendReportEmail } from '@/lib/email';
-import { runAudit, UnsafeUrlError } from '@/lib/runAudit';
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin';
+import { createAuditJob, isInternalCall } from '@/lib/auditJobs';
+import { normalizeUrl } from '@/lib/runAudit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
- * Scheduled re-audit (#7). Runs on a Vercel Cron (see vercel.json) and
- * re-audits every seo_watchlist row, emailing only when the composite
- * overallScore has actually moved since the last check.
+ * Weekly scheduler (Vercel Cron, see vercel.json). Fans out one audit job
+ * per site — every seo_clients row plus every seo_watchlist URL, deduped —
+ * and dispatches each to the /api/jobs/run worker. Dispatch is fast (the
+ * worker answers 202 and runs in its own invocation), so this function
+ * never approaches its time limit regardless of client count.
  *
- * (B4, now fully fixed) The original version claimed to "only email on
- * change" but couldn't — the watchlist lived in a static WATCHLIST env var,
- * so last_score never persisted between runs and it silently emailed every
- * time regardless. Real rows in seo_watchlist (see /api/watchlist) let this
- * job read AND write last_score/last_checked_at, so change detection is now
- * genuine. Falls back to the WATCHLIST env var only when Supabase isn't
- * configured, as a no-DB stand-in (same caveat as before applies there).
+ * Replaces the previous design, which ran every site's full audit serially
+ * inside this single 60s function (could not finish even one site) and
+ * never ran at all in production because CRON_SECRET was unset.
  *
- * Secured by CRON_SECRET: Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`.
- * (S4) If CRON_SECRET isn't configured, this endpoint refuses to run rather
- * than silently operating unauthenticated.
+ * Secured by CRON_SECRET (Vercel Cron sends `Authorization: Bearer ...`);
+ * fails closed when unset.
  */
 export async function GET(request: Request) {
   if (!process.env.CRON_SECRET) {
-    return NextResponse.json(
-      { error: 'CRON_SECRET is not configured — refusing to run an unauthenticated cron endpoint.' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'CRON_SECRET is not configured — refusing to run.' }, { status: 500 });
   }
-  const auth = request.headers.get('authorization');
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isInternalCall(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isSupabaseConfigured()) return NextResponse.json({ error: 'Supabase not configured' }, { status: 501 });
 
+  const db = supabaseAdmin();
   const origin = new URL(request.url).origin;
-  const results: { url: string; score: number | null; emailed: boolean; error?: string }[] = [];
 
-  if (isSupabaseConfigured()) {
-    const db = supabaseAdmin();
-    const { data: watchlist, error } = await db
-      .from('seo_watchlist')
-      .select('id, url, email, last_score');
+  const [{ data: clients, error: cErr }, { data: watchlist, error: wErr }] = await Promise.all([
+    db.from('seo_clients').select('url, domain'),
+    db.from('seo_watchlist').select('id, url'),
+  ]);
+  if (cErr || wErr) return NextResponse.json({ error: 'Failed to load targets' }, { status: 500 });
 
-    if (error) {
-      return NextResponse.json({ error: 'Failed to load watchlist' }, { status: 500 });
-    }
-    if (!watchlist || watchlist.length === 0) {
-      return NextResponse.json({ success: true, message: 'Watchlist empty — nothing to do.' });
-    }
-
-    for (const item of watchlist) {
-      try {
-        const { data } = await runAudit(item.url, undefined);
-        const score = data.overallScore ?? null;
-        // Genuine change detection: last_score is a real persisted value now.
-        const changed = item.last_score == null || (score != null && Math.abs(score - item.last_score) >= 1);
-
-        if (changed && item.email) {
-          await sendReportEmail({
-            to: item.email,
-            url: item.url,
-            domain: data.domain,
-            score,
-            previousScore: item.last_score ?? null,
-            reportUrl: `${origin}/dashboard?url=${encodeURIComponent(item.url)}`,
-          });
-        }
-
-        await db
-          .from('seo_watchlist')
-          .update({ last_score: score, last_checked_at: new Date().toISOString() })
-          .eq('id', item.id);
-
-        results.push({ url: item.url, score, emailed: changed && !!item.email });
-      } catch (e) {
-        const message = e instanceof UnsafeUrlError ? e.message : e instanceof Error ? e.message : 'failed';
-        results.push({ url: item.url, score: null, emailed: false, error: message });
-      }
-    }
-
-    return NextResponse.json({ success: true, audited: results.length, results });
-  }
-
-  // No-DB fallback: static env watchlist, no persisted change detection.
-  let envWatchlist: { url: string; email: string; lastScore?: number }[] = [];
-  try {
-    envWatchlist = JSON.parse(process.env.WATCHLIST || '[]');
-  } catch {
-    return NextResponse.json({ error: 'Invalid WATCHLIST env' }, { status: 500 });
-  }
-  if (envWatchlist.length === 0) {
-    return NextResponse.json({ success: true, message: 'Watchlist empty — nothing to do.' });
-  }
-
-  for (const item of envWatchlist) {
+  // Dedupe by normalized URL; a watchlist entry for a client site keeps its
+  // watchlistId so the owner still gets their change email.
+  const targets = new Map<string, { url: string; domain: string; watchlistId?: string }>();
+  for (const c of clients ?? []) {
     try {
-      const { data } = await runAudit(item.url, undefined);
-      const score = data.overallScore ?? null;
-      if (item.email) {
-        await sendReportEmail({
-          to: item.email,
-          url: item.url,
-          domain: data.domain,
-          score,
-          previousScore: item.lastScore ?? null,
-          reportUrl: `${origin}/dashboard?url=${encodeURIComponent(item.url)}`,
-        });
-      }
-      results.push({ url: item.url, score, emailed: !!item.email });
-    } catch (e) {
-      const message = e instanceof UnsafeUrlError ? e.message : e instanceof Error ? e.message : 'failed';
-      results.push({ url: item.url, score: null, emailed: false, error: message });
-    }
+      const url = normalizeUrl(c.url || `https://${c.domain}`);
+      targets.set(url, { url, domain: new URL(url).hostname });
+    } catch { /* skip malformed */ }
+  }
+  for (const w of watchlist ?? []) {
+    try {
+      const url = normalizeUrl(w.url);
+      targets.set(url, { url, domain: new URL(url).hostname, watchlistId: w.id });
+    } catch { /* skip malformed */ }
   }
 
-  return NextResponse.json({ success: true, audited: results.length, results });
+  const dispatched = await Promise.all(
+    [...targets.values()].map(async (t) => {
+      const auditId = await createAuditJob(db, { url: t.url, domain: t.domain });
+      if (!auditId) return { url: t.url, ok: false, error: 'job insert failed' };
+      try {
+        const res = await fetch(`${origin}/api/jobs/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.CRON_SECRET}` },
+          body: JSON.stringify({ auditId, url: t.url, watchlistId: t.watchlistId }),
+        });
+        return { url: t.url, auditId, ok: res.status === 202, status: res.status };
+      } catch (e) {
+        return { url: t.url, auditId, ok: false, error: e instanceof Error ? e.message : 'dispatch failed' };
+      }
+    }),
+  );
+
+  return NextResponse.json({
+    success: true,
+    dispatched: dispatched.filter((d) => d.ok).length,
+    total: dispatched.length,
+    jobs: dispatched,
+  });
 }
