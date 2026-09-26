@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Zap, Search, Users, FileText, BarChart3, Settings, HelpCircle,
   Sparkles, Eye, Trophy, Quote, PenLine, UserRound, TrendingUp, Rocket, X,
-  Grid3x3, Building2, Heart, ShieldCheck, Link2, LineChart, ShoppingCart, Bot, FileCode2, Target, ListChecks,
+  Grid3x3, Building2, Heart, ShieldCheck, Link2, LineChart, ShoppingCart, Bot, FileCode2, Target, ListTodo, ListChecks,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -62,6 +62,7 @@ const GROUPS: { label: string | null; items: { id: string; label: string; icon: 
   {
     label: 'Act',
     items: [
+      { id: 'task-list', label: 'SEO / GEO task list', icon: ListTodo },
       { id: 'program-strategy', label: 'Program strategy', icon: Target },
       { id: 'reports', label: 'Optimization plan', icon: Rocket },
       { id: 'activation', label: 'AI-ready artifacts', icon: FileCode2 },

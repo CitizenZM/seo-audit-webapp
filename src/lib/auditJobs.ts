@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { runAudit, type Stage } from '@/lib/runAudit';
+import { syncTasksForAudit } from '@/lib/taskSync';
 
 /**
  * Audit job lifecycle shared by the interactive route (/api/audits), the
@@ -75,6 +76,18 @@ export async function executeAuditJob(
         updated_at: new Date().toISOString(),
       })
       .eq('id', auditId);
+
+    // Agent step: turn findings into the persistent SEO/GEO task list and
+    // auto-verify fixes from the previous audit. Best effort — never fails the audit.
+    const { data: job } = await db.from('seo_audits').select('client_id, domain').eq('id', auditId).maybeSingle();
+    const sync = await syncTasksForAudit(db, {
+      auditId,
+      domain: job?.domain ?? new URL(url).hostname,
+      clientId: job?.client_id ?? null,
+      data: result.data,
+    });
+    if (!sync.ok) console.warn('Task sync failed:', sync.error);
+
     return { ok: true, overallScore: result.data.overallScore ?? null };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

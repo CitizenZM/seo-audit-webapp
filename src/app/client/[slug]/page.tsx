@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import TaskListCard from '../../dashboard/TaskListCard';
 import { BarChart3, Loader2, XCircle, ArrowLeft, Rocket, ArrowRight } from 'lucide-react';
 
 interface ClientDetail {
@@ -200,6 +201,7 @@ export default function ClientWorkspacePage() {
             </div>
           )}
         </div>
+        <TaskListCard domain={client.domain} />
       </main>
     </div>
   );

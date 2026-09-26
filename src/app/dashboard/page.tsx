@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { AlertCircle, CheckCircle2, XCircle, Zap, Target, Link2, FileText, Gauge, Search, Sparkles } from 'lucide-react';
 import Explainer from './Explainer';
 import ProgramStrategyCard from './ProgramStrategyCard';
+import TaskListCard from './TaskListCard';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import StatCard from './StatCard';
@@ -655,6 +656,8 @@ function DashboardContent() {
           </section>
 
           {/* Action Plan Board & Content Calendar */}
+          <TaskListCard domain={data.domain} auditData={data} />
+
           <ProgramStrategyCard strategy={data.programStrategy ?? null} />
 
           <section id="reports" className="flex flex-col gap-5 scroll-mt-20">
