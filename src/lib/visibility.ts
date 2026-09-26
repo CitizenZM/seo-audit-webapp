@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { resolveCompatEngines, planProbes, withRetry, limiter } from './probeEngines';
+import { resolveCompatEngines, planProbes, withRetry, limiter, withDeadline } from './probeEngines';
 import { activeProvider, aiText, extractJson, cliAvailable, OPENAI_MODEL } from '@/lib/ai';
 
 /**
@@ -460,9 +460,11 @@ export async function analyzeVisibility(input: VisibilityInput): Promise<Visibil
 
   const target = targetCandidates(input.domain, input.title);
 
+  // Shared wall-clock budget for all probes (see withDeadline).
+  const probeDeadline = Date.now() + Number(process.env.PROBE_BUDGET_MS || 120_000);
   const settled = await Promise.allSettled(
     planProbes(plan, targets).map(async ({ target: t, prompt: p }): Promise<PromptResult & { raw: string }> => {
-      const raw = await t.ask(p.prompt);
+      const raw = await withDeadline(t.ask(p.prompt), probeDeadline);
       const rawSources = parseList(raw, 'SOURCES');
       return {
         ...p,

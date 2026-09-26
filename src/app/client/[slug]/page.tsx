@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import TaskListCard from '../../dashboard/TaskListCard';
+import FixQueueCard from '../../dashboard/FixQueueCard';
 import { BarChart3, Loader2, XCircle, ArrowLeft, Rocket, ArrowRight } from 'lucide-react';
 
 interface ClientDetail {
@@ -201,6 +202,7 @@ export default function ClientWorkspacePage() {
             </div>
           )}
         </div>
+        <FixQueueCard clientSlug={client.slug} />
         <TaskListCard domain={client.domain} />
       </main>
     </div>
