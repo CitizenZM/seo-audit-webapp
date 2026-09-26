@@ -137,3 +137,21 @@ export function limiter(max: number) {
     }
   };
 }
+
+/**
+ * Reject when a shared wall-clock deadline passes. Visibility probing runs
+ * inside a 300s audit function; a slow/queued engine must not push the whole
+ * audit past it (full us.tcl.com run with 3 engines took 222s). Late probes
+ * are dropped and the gathered results are used.
+ */
+export function withDeadline<T>(task: Promise<T>, deadline: number): Promise<T> {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) return Promise.reject(new Error('probe budget exhausted'));
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('probe budget exhausted')), remaining);
+    task.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}

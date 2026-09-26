@@ -56,3 +56,19 @@ describe('withRetry', () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('withDeadline', () => {
+  it('resolves when the task beats the deadline', async () => {
+    const { withDeadline } = await import('./probeEngines');
+    await expect(withDeadline(Promise.resolve('ok'), Date.now() + 1000)).resolves.toBe('ok');
+  });
+  it('rejects once the shared deadline passes so a slow engine cannot stall the audit', async () => {
+    const { withDeadline } = await import('./probeEngines');
+    const slow = new Promise((r) => setTimeout(() => r('late'), 500));
+    await expect(withDeadline(slow, Date.now() + 20)).rejects.toThrow(/budget/);
+  });
+  it('rejects immediately when the deadline is already past', async () => {
+    const { withDeadline } = await import('./probeEngines');
+    await expect(withDeadline(new Promise(() => {}), Date.now() - 1)).rejects.toThrow(/budget/);
+  });
+});
