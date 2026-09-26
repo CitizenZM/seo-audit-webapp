@@ -20,12 +20,58 @@ export interface ShopifyCreds {
   token: string;
 }
 
-export const tokenEnvName = (clientSlug: string) => `SHOPIFY_ADMIN_TOKEN_${clientSlug.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
+const envSlug = (clientSlug: string) => clientSlug.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+export const tokenEnvName = (clientSlug: string) => `SHOPIFY_ADMIN_TOKEN_${envSlug(clientSlug)}`;
+export const clientIdEnvName = (clientSlug: string) => `SHOPIFY_CLIENT_ID_${envSlug(clientSlug)}`;
+export const clientSecretEnvName = (clientSlug: string) => `SHOPIFY_CLIENT_SECRET_${envSlug(clientSlug)}`;
 
-export function credsForClient(client: { slug: string; shop_domain?: string | null }): ShopifyCreds | null {
-  const token = process.env[tokenEnvName(client.slug)]?.trim();
-  if (!token || !client.shop_domain) return null;
-  return { shop: client.shop_domain, token };
+type ClientRef = { slug: string; shop_domain?: string | null };
+
+/**
+ * Two credential styles:
+ *  - Legacy admin-created custom app token (SHOPIFY_ADMIN_TOKEN_<SLUG>) —
+ *    still works, but Shopify stopped allowing new ones on 2026-01-01.
+ *  - Dev Dashboard app (SHOPIFY_CLIENT_ID_<SLUG> + SHOPIFY_CLIENT_SECRET_<SLUG>)
+ *    exchanged via the client credentials grant for a 24h token (app and
+ *    store must be in the same organization, app installed on the store).
+ */
+export function hasShopifyCredentials(client: ClientRef): boolean {
+  if (!client.shop_domain) return false;
+  const env = process.env;
+  return Boolean(
+    env[tokenEnvName(client.slug)]?.trim() ||
+      (env[clientIdEnvName(client.slug)]?.trim() && env[clientSecretEnvName(client.slug)]?.trim()),
+  );
+}
+
+const tokenCache = new Map<string, { token: string; expiresAt: number }>();
+export const __resetTokenCache = () => tokenCache.clear();
+
+export async function resolveCreds(client: ClientRef): Promise<ShopifyCreds | null> {
+  if (!client.shop_domain) return null;
+  const shop = client.shop_domain;
+  const legacy = process.env[tokenEnvName(client.slug)]?.trim();
+  if (legacy) return { shop, token: legacy };
+
+  const id = process.env[clientIdEnvName(client.slug)]?.trim();
+  const secret = process.env[clientSecretEnvName(client.slug)]?.trim();
+  if (!id || !secret) return null;
+
+  const cached = tokenCache.get(shop);
+  if (cached && cached.expiresAt > Date.now()) return { shop, token: cached.token };
+
+  const res = await fetch(`https://${shop}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'client_credentials', client_id: id, client_secret: secret }).toString(),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`Shopify token exchange failed (HTTP ${res.status}) — check the app is installed on ${shop} and in the same organization`);
+  const json = (await res.json()) as { access_token?: string; expires_in?: number };
+  if (!json.access_token) throw new Error('Shopify token exchange returned no access_token');
+  // Refresh 10 minutes before the 24h expiry.
+  tokenCache.set(shop, { token: json.access_token, expiresAt: Date.now() + Math.max(60, (json.expires_in ?? 86399) - 600) * 1000 });
+  return { shop, token: json.access_token };
 }
 
 interface GqlUserError { field?: string[] | null; message: string }

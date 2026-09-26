@@ -71,3 +71,60 @@ describe('shopifyPort', () => {
     await expect(port.readField('p1', 'seo_title', 'p1')).rejects.toThrow(/401/);
   });
 });
+
+describe('client credentials grant (Dev Dashboard apps, 2026+)', () => {
+  const client = { slug: 'dark-fantasy', shop_domain: 'df.myshopify.com' };
+  afterEach(() => {
+    delete process.env.SHOPIFY_ADMIN_TOKEN_DARK_FANTASY;
+    delete process.env.SHOPIFY_CLIENT_ID_DARK_FANTASY;
+    delete process.env.SHOPIFY_CLIENT_SECRET_DARK_FANTASY;
+  });
+
+  it('reports configured from env presence without a network call', async () => {
+    const { hasShopifyCredentials } = await import('./shopify');
+    expect(hasShopifyCredentials(client)).toBe(false);
+    process.env.SHOPIFY_CLIENT_ID_DARK_FANTASY = 'id';
+    process.env.SHOPIFY_CLIENT_SECRET_DARK_FANTASY = 'secret';
+    expect(hasShopifyCredentials(client)).toBe(true);
+    expect(hasShopifyCredentials({ ...client, shop_domain: null })).toBe(false);
+  });
+
+  it('exchanges id/secret for a token with the documented form request, and caches it', async () => {
+    const { resolveCreds, __resetTokenCache } = await import('./shopify');
+    __resetTokenCache();
+    process.env.SHOPIFY_CLIENT_ID_DARK_FANTASY = 'cid';
+    process.env.SHOPIFY_CLIENT_SECRET_DARK_FANTASY = 'csecret';
+    const calls: { url: string; body: string; ct: string }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, body: String(init.body), ct: String((init.headers as Record<string, string>)['Content-Type']) });
+      return new Response(JSON.stringify({ access_token: 'tok_1', scope: 'read_products', expires_in: 86399 }), { status: 200 });
+    }));
+    const a = await resolveCreds(client);
+    const b = await resolveCreds(client);
+    expect(a).toEqual({ shop: 'df.myshopify.com', token: 'tok_1' });
+    expect(b).toEqual(a);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('https://df.myshopify.com/admin/oauth/access_token');
+    expect(calls[0].ct).toBe('application/x-www-form-urlencoded');
+    expect(new URLSearchParams(calls[0].body).get('grant_type')).toBe('client_credentials');
+    expect(new URLSearchParams(calls[0].body).get('client_id')).toBe('cid');
+  });
+
+  it('prefers a legacy admin token when present (no exchange)', async () => {
+    const { resolveCreds, __resetTokenCache } = await import('./shopify');
+    __resetTokenCache();
+    process.env.SHOPIFY_ADMIN_TOKEN_DARK_FANTASY = 'shpat_x';
+    const f = vi.fn(); vi.stubGlobal('fetch', f);
+    expect(await resolveCreds(client)).toEqual({ shop: 'df.myshopify.com', token: 'shpat_x' });
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it('throws a clear error when the exchange is rejected (e.g. app not installed)', async () => {
+    const { resolveCreds, __resetTokenCache } = await import('./shopify');
+    __resetTokenCache();
+    process.env.SHOPIFY_CLIENT_ID_DARK_FANTASY = 'cid';
+    process.env.SHOPIFY_CLIENT_SECRET_DARK_FANTASY = 'bad';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"invalid_client"}', { status: 400 })));
+    await expect(resolveCreds(client)).rejects.toThrow(/token exchange failed.*400/i);
+  });
+});
