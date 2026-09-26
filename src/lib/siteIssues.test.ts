@@ -167,3 +167,23 @@ describe('throttle statuses are not site errors', () => {
     expect(issues.find((i) => i.id === 'SERVER_ERROR')).toBeUndefined();
   });
 });
+
+describe('crawlHealth reflects prevalence (regression: us.tcl.com scored 95 with issues on every page)', () => {
+  const page = (i: number, over: Record<string, unknown> = {}) => ({
+    url: `https://a.com/p${i}`, status: 200, title: `A reasonable title for page ${i}`, titleLength: 40, metaDescriptionLength: 140,
+    h1Count: 1, wordCount: 600, canonical: `https://a.com/p${i}`, noindex: false, hasJsonLd: true, schemaTypes: ['Product'],
+    imageCount: 3, imagesMissingAlt: 0, internalLinkCount: 10, externalLinkCount: 1, responseTimeMs: 100, ...over,
+  });
+  it('a site where every page has two systemic medium issues scores well below 90', async () => {
+    const { detectSiteIssues } = await import('./siteIssues');
+    const pages = Array.from({ length: 100 }, (_, i) => page(i, { titleLength: 95, title: 'x'.repeat(95) + i, imagesMissingAlt: 3 }));
+    expect(detectSiteIssues(pages as never).summary.crawlHealth).toBeLessThanOrEqual(80);
+  });
+  it('a clean site scores 100 and any critical error costs at least 10 points', async () => {
+    const { detectSiteIssues } = await import('./siteIssues');
+    const clean = Array.from({ length: 50 }, (_, i) => page(i));
+    expect(detectSiteIssues(clean as never).summary.crawlHealth).toBe(100);
+    const withError = [...clean, page(99, { status: 500 })];
+    expect(detectSiteIssues(withError as never).summary.crawlHealth).toBeLessThanOrEqual(90);
+  });
+});

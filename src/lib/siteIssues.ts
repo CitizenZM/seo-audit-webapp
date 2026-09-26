@@ -229,7 +229,7 @@ export function detectSiteIssues(pages: CrawledPageRow[]): SiteIssuesResult {
   for (const p of errorPages) pagesWithIssues.add(p.url);
 
   const pagesCrawled = pages.length;
-  const crawlHealth = computeCrawlHealth(pagesCrawled, pagesWithIssues.size, issueCounts);
+  const crawlHealth = computeCrawlHealth(pagesCrawled, finalIssues);
 
   return {
     issues: finalIssues,
@@ -248,21 +248,21 @@ export function detectSiteIssues(pages: CrawledPageRow[]): SiteIssuesResult {
  * a large site with a few problems doesn't score the same as a small site
  * riddled with them.
  */
-function computeCrawlHealth(
-  pagesCrawled: number,
-  pagesWithIssuesCount: number,
-  issueCounts: Record<IssueSeverity, number>,
-): number {
+/**
+ * 0-100 health from issue PREVALENCE: each issue type costs
+ * (share of crawled pages affected) × severity weight, plus a flat 10 per
+ * critical issue type present. The previous formula divided total issue
+ * count by page count, so a problem present on every page cost ~2 points
+ * (us.tcl.com scored 95 with long titles on 125/131 pages and missing alt
+ * text on all 131).
+ */
+function computeCrawlHealth(pagesCrawled: number, issues: SiteIssue[]): number {
   if (pagesCrawled === 0) return 0;
-
-  const weights: Record<IssueSeverity, number> = { critical: 10, high: 5, medium: 2, low: 0.5 };
-  const weightedPenalty =
-    issueCounts.critical * weights.critical +
-    issueCounts.high * weights.high +
-    issueCounts.medium * weights.medium +
-    issueCounts.low * weights.low;
-
-  const normalizedPenalty = weightedPenalty / pagesCrawled;
-  const score = 100 - normalizedPenalty;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  const weights: Record<IssueSeverity, number> = { critical: 40, high: 20, medium: 10, low: 4 };
+  let penalty = 0;
+  for (const issue of issues) {
+    const rate = Math.min(1, issue.count / pagesCrawled);
+    penalty += weights[issue.severity] * rate + (issue.severity === 'critical' ? 10 : 0);
+  }
+  return Math.max(0, Math.min(100, Math.round(100 - penalty)));
 }
