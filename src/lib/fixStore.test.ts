@@ -8,6 +8,7 @@ function fakeDb() {
   const tables: Record<string, Record<string, unknown>[]> = { seo_fixes: [], seo_clients: [] };
   let seq = 0;
   function builder(table: string) {
+    tables[table] ??= []; // unknown tables (e.g. seo_shop_connections) start empty
     const filters: ((r: Record<string, unknown>) => boolean)[] = [];
     let op: 'select' | 'update' | 'insert' = 'select';
     let patch: Record<string, unknown> = {};
