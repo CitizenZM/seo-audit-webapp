@@ -98,14 +98,19 @@ query Products($first: Int!, $after: String) {
   products(first: $first, after: $after, sortKey: TITLE) {
     pageInfo { hasNextPage endCursor }
     nodes {
-      id title handle description(truncateAt: 600)
+      id title handle status onlineStoreUrl description(truncateAt: 600)
       seo { title description }
       media(first: 20) { nodes { ... on MediaImage { id alt } } }
     }
   }
 }`;
 
-export async function fetchProducts(creds: ShopifyCreds, opts: { limit?: number } = {}): Promise<ProductSnapshot[]> {
+/**
+ * Scan published catalog only by default: drafts and products not published
+ * to the Online Store get no SEO benefit (live Dark Fantasy scan: 48 of 58
+ * title proposals were drafts).
+ */
+export async function fetchProducts(creds: ShopifyCreds, opts: { limit?: number; includeUnpublished?: boolean } = {}): Promise<ProductSnapshot[]> {
   const limit = opts.limit ?? 250;
   const out: ProductSnapshot[] = [];
   let after: string | null = null;
@@ -114,7 +119,7 @@ export async function fetchProducts(creds: ShopifyCreds, opts: { limit?: number 
       products: {
         pageInfo: { hasNextPage: boolean; endCursor: string | null };
         nodes: {
-          id: string; title: string; handle: string; description: string;
+          id: string; title: string; handle: string; description: string; status?: string; onlineStoreUrl?: string | null;
           seo: { title: string | null; description: string | null };
           media: { nodes: { id?: string; alt?: string | null }[] };
         }[];
@@ -122,6 +127,7 @@ export async function fetchProducts(creds: ShopifyCreds, opts: { limit?: number 
     };
     const data: Page = await gql<Page>(creds, PRODUCTS_QUERY, { first: Math.min(50, limit - out.length), after });
     for (const p of data.products.nodes) {
+      if (!opts.includeUnpublished && (p.status !== 'ACTIVE' || !p.onlineStoreUrl)) continue;
       out.push({
         id: p.id,
         title: p.title,

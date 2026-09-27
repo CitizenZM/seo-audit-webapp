@@ -8,6 +8,7 @@ function fakeDb() {
   const tables: Record<string, Record<string, unknown>[]> = { seo_fixes: [], seo_clients: [] };
   let seq = 0;
   function builder(table: string) {
+    tables[table] ??= []; // unknown tables (e.g. seo_shop_connections) start empty
     const filters: ((r: Record<string, unknown>) => boolean)[] = [];
     let op: 'select' | 'update' | 'insert' = 'select';
     let patch: Record<string, unknown> = {};
@@ -57,22 +58,22 @@ describe('fixStore end-to-end', () => {
 
   it('scans → proposes (no store writes) → dedupes on re-scan', async () => {
     const { db, tables } = fakeDb();
-    const r1 = await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({}) });
+    const r1 = await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({ p1: { seoTitle: 'Velvet Blindfold - Lined Full Blackout Comfort' } }) });
     expect(r1).toMatchObject({ scanned: 1, proposed: 3 });
     expect(tables.seo_fixes.map((f) => f.field).sort()).toEqual(['image_alt', 'seo_description', 'seo_title']);
-    const r2 = await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({}) });
+    const r2 = await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({ p1: { seoTitle: 'Velvet Blindfold - Lined Full Blackout Comfort' } }) });
     expect(r2.proposed).toBe(0);
   });
 
   it('approve writes, second-checks, records evidence; rollback restores', async () => {
     const { db, tables } = fakeDb();
-    await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({}) });
+    await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({ p1: { seoTitle: 'Velvet Blindfold - Lined Full Blackout Comfort' } }) });
     const titleFix = tables.seo_fixes.find((f) => f.field === 'seo_title')!;
     const { port, store } = fakeShop({ 'p1:seo_title': null });
 
     const applied = await actOnFix(db, titleFix.id as string, 'approve', { operator: 'barron', port });
-    expect(applied).toMatchObject({ fix: { status: 'verified', observed_value: 'Velvet Blindfold Noir | Dark Fantasy' } });
-    expect(store['p1:seo_title']).toBe('Velvet Blindfold Noir | Dark Fantasy');
+    expect(applied).toMatchObject({ fix: { status: 'verified', observed_value: 'Velvet Blindfold - Lined Full Blackout Comfort' } });
+    expect(store['p1:seo_title']).toBe('Velvet Blindfold - Lined Full Blackout Comfort');
     expect((titleFix.events as { type: string }[]).map((e) => e.type)).toEqual(['proposed', 'apply']);
 
     const rolled = await actOnFix(db, titleFix.id as string, 'rollback', { operator: 'barron', port });
@@ -82,7 +83,7 @@ describe('fixStore end-to-end', () => {
 
   it('operator-edited value is what gets written, and is labeled operator', async () => {
     const { db, tables } = fakeDb();
-    await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({}) });
+    await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({ p1: { seoTitle: 'Velvet Blindfold - Lined Full Blackout Comfort' } }) });
     const fix = tables.seo_fixes.find((f) => f.field === 'seo_title')!;
     const { port, store } = fakeShop({ 'p1:seo_title': null });
     await actOnFix(db, fix.id as string, 'approve', { operator: 'barron', port, value: 'Velvet Blindfold – Lined Comfort Fit' });
@@ -92,7 +93,7 @@ describe('fixStore end-to-end', () => {
 
   it('merchant edited the product since the scan → conflict, nothing written', async () => {
     const { db, tables } = fakeDb();
-    await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({}) });
+    await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({ p1: { seoTitle: 'Velvet Blindfold - Lined Full Blackout Comfort' } }) });
     const fix = tables.seo_fixes.find((f) => f.field === 'seo_title')!;
     const { port, store } = fakeShop({ 'p1:seo_title': 'Merchant wrote this' });
     const r = await actOnFix(db, fix.id as string, 'approve', { operator: 'barron', port });
@@ -102,7 +103,7 @@ describe('fixStore end-to-end', () => {
 
   it('refuses illegal transitions', async () => {
     const { db, tables } = fakeDb();
-    await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({}) });
+    await proposeForClient(db, client, { fetch: async () => products, draft: async () => ({ p1: { seoTitle: 'Velvet Blindfold - Lined Full Blackout Comfort' } }) });
     const fix = tables.seo_fixes[0];
     const { port } = fakeShop({});
     expect(await actOnFix(db, fix.id as string, 'rollback', { operator: 'b', port })).toMatchObject({ status: 409 });

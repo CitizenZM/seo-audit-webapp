@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const db = supabaseAdmin();
   const client = await loadClient(db, body.client);
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
-  const conn = connection(client);
+  const conn = await connection(db, client);
   if (!conn.connected) {
     return NextResponse.json({ error: `Store not connected — set ${conn.tokenEnv} (Shopify custom app Admin API token) in Vercel` }, { status: 412 });
   }

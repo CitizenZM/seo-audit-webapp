@@ -26,5 +26,5 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: 'Failed to load fixes' }, { status: 500 });
 
   const counts = (data ?? []).reduce<Record<string, number>>((acc, f: { status: string }) => ({ ...acc, [f.status]: (acc[f.status] ?? 0) + 1 }), {});
-  return NextResponse.json({ client: connection(client), fixes: data ?? [], counts });
+  return NextResponse.json({ client: await connection(db, client), fixes: data ?? [], counts });
 }
