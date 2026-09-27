@@ -22,7 +22,7 @@ describe('fetchProducts', () => {
         products: {
           pageInfo: { hasNextPage: page === 1, endCursor: page === 1 ? 'c1' : null },
           nodes: [{
-            id: `gid://shopify/Product/${page}`, title: `P${page}`, handle: `p${page}`, description: 'd',
+            id: `gid://shopify/Product/${page}`, title: `P${page}`, handle: `p${page}`, description: 'd', status: 'ACTIVE', onlineStoreUrl: `https://s.com/p${page}`,
             seo: { title: page === 1 ? null : 'T', description: null },
             media: { nodes: [{ id: `gid://shopify/MediaImage/${page}`, alt: '' }, {}] },
           }],
@@ -126,5 +126,24 @@ describe('client credentials grant (Dev Dashboard apps, 2026+)', () => {
     process.env.SHOPIFY_CLIENT_SECRET_DARK_FANTASY = 'bad';
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"invalid_client"}', { status: 400 })));
     await expect(resolveCreds(client)).rejects.toThrow(/token exchange failed.*400/i);
+  });
+});
+
+describe('scan scope', () => {
+  it('skips drafts and products not published to the online store (live: 48/58 title proposals were drafts)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ok({
+      products: {
+        pageInfo: { hasNextPage: false, endCursor: null },
+        nodes: [
+          { id: 'a', title: 'Live', handle: 'l', description: '', status: 'ACTIVE', onlineStoreUrl: 'https://s.com/products/l', seo: { title: null, description: null }, media: { nodes: [] } },
+          { id: 'b', title: 'Draft', handle: 'd', description: '', status: 'DRAFT', onlineStoreUrl: null, seo: { title: null, description: null }, media: { nodes: [] } },
+          { id: 'c', title: 'Unpublished', handle: 'u', description: '', status: 'ACTIVE', onlineStoreUrl: null, seo: { title: null, description: null }, media: { nodes: [] } },
+        ],
+      },
+    })));
+    const products = await fetchProducts({ shop: 's.myshopify.com', token: 't' });
+    expect(products.map((p) => p.id)).toEqual(['a']);
+    const all = await fetchProducts({ shop: 's.myshopify.com', token: 't' }, { includeUnpublished: true });
+    expect(all.map((p) => p.id)).toEqual(['a', 'b', 'c']);
   });
 });

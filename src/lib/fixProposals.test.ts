@@ -22,8 +22,9 @@ describe('buildProposals', () => {
 
   it('falls back deterministically when the AI draft is missing or violates length rules', () => {
     const out = buildProposals(needs, [p], { p1: { seoTitle: 'x'.repeat(80), seoDescription: 'too short' } }, 'Dark Fantasy');
-    const t = out.find((x) => x.field === 'seo_title')!;
-    expect(t).toMatchObject({ proposedValue: 'Velvet Blindfold Noir | Dark Fantasy', source: 'fallback' });
+    // Invalid AI title + short product title → the fallback would equal the
+    // product title Shopify already renders, so no (no-op) title proposal.
+    expect(out.find((x) => x.field === 'seo_title')).toBeUndefined();
     const d = out.find((x) => x.field === 'seo_description')!;
     expect(d.source).toBe('fallback');
     expect(d.proposedValue.length).toBeGreaterThanOrEqual(70);
@@ -72,5 +73,22 @@ describe('fitDescription (LLMs ignore char limits: live drafts were 219–275 ch
     const out = buildProposals([{ resourceId: 'p1', productId: 'p1', productTitle: p.title, field: 'seo_description', reason: 'missing', currentValue: null }], [p], { p1: { seoDescription: long } }, 'DF');
     expect(out[0].source).toBe('ai');
     expect(out[0].proposedValue.length).toBeLessThanOrEqual(160);
+  });
+});
+
+describe('pilot findings: no brand in titles, no no-op proposals', () => {
+  const base = { handle: 'h', description: 'd'.repeat(100), seoDescription: 'x'.repeat(130), images: [] };
+  const need = (id: string, title: string) => ({ resourceId: id, productId: id, productTitle: title, field: 'seo_title' as const, reason: 'missing' as const, currentValue: null });
+
+  it('strips a trailing brand from AI title drafts', () => {
+    const p = { ...base, id: 'p1', title: 'Latex Lingerie Set', seoTitle: null };
+    const out = buildProposals([need('p1', p.title)], [p], { p1: { seoTitle: 'Latex Lingerie Set - Cupless 3-Piece | Dark Fantasy' } }, 'Dark Fantasy');
+    expect(out[0].proposedValue).toBe('Latex Lingerie Set - Cupless 3-Piece');
+  });
+
+  it('skips a missing-title proposal that would just equal the product title (Shopify already defaults to it)', () => {
+    const p = { ...base, id: 'p2', title: 'Leather Collar', seoTitle: null };
+    expect(buildProposals([need('p2', p.title)], [p], {}, 'Dark Fantasy')).toEqual([]);
+    expect(buildProposals([need('p2', p.title)], [p], { p2: { seoTitle: 'Leather Collar | Dark Fantasy' } }, 'Dark Fantasy')).toEqual([]);
   });
 });

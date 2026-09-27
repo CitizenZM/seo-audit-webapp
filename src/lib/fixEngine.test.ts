@@ -63,8 +63,10 @@ describe('validators', () => {
     expect(validateSeoDescription('d'.repeat(161))).toBe(false);
   });
   it('fallback title stays within 60 chars and appends the brand when it fits', () => {
-    expect(fallbackTitle('Leather Collar', 'Dark Fantasy')).toBe('Leather Collar | Dark Fantasy');
-    expect(fallbackTitle('A'.repeat(70), 'Dark Fantasy').length).toBeLessThanOrEqual(60);
+    // Themes append the shop name to <title> ("… – Dark Fantasy"), so the SEO
+    // title must never carry the brand itself (pilot found "| DF – DF" risk).
+    expect(fallbackTitle('Leather Collar', 'Dark Fantasy')).toBe('Leather Collar');
+    expect(fallbackTitle('A '.repeat(40).trim(), 'Dark Fantasy').length).toBeLessThanOrEqual(60);
   });
 });
 
@@ -147,5 +149,14 @@ describe('fallback copy is clean text (live Dark Fantasy data had &amp; entities
     const out = fallbackDescription('<p>The Wrist &amp; Thigh Cuffs&nbsp;set &mdash; padded &quot;soft&quot; restraints for couples, adjustable and lockable for many scenarios.</p>', 'Cuffs', 'DF')!;
     expect(out).not.toMatch(/&amp;|&nbsp;|&quot;|&mdash;|<p>/);
     expect(out).toContain('Wrist & Thigh');
+  });
+});
+
+describe('stripBrand', () => {
+  it('removes a trailing brand with any separator, case-insensitively', async () => {
+    const { stripBrand } = await import('./fixEngine');
+    expect(stripBrand('Latex Lingerie Set - Cupless 3-Piece | Dark Fantasy', 'Dark Fantasy')).toBe('Latex Lingerie Set - Cupless 3-Piece');
+    expect(stripBrand('Velvet Blindfold – dark fantasy', 'Dark Fantasy')).toBe('Velvet Blindfold');
+    expect(stripBrand('Dark Fantasy Collar', 'Dark Fantasy')).toBe('Dark Fantasy Collar');
   });
 });

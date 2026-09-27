@@ -5,6 +5,7 @@ import {
   fallbackAlt,
   fallbackDescription,
   fallbackTitle,
+  stripBrand,
   validateSeoDescription,
   validateSeoTitle,
   DESC_MAX,
@@ -54,6 +55,8 @@ export function fitDescription(text: string): string | null {
   return atWord.length >= DESC_MIN ? `${atWord}…` : null;
 }
 
+const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
 export type Drafts = Record<string, { seoTitle?: string; seoDescription?: string }>;
 
 export function buildProposals(needs: FixNeed[], products: ProductSnapshot[], drafts: Drafts, brand: string): Proposal[] {
@@ -67,9 +70,13 @@ export function buildProposals(needs: FixNeed[], products: ProductSnapshot[], dr
     let source: Proposal['source'] = 'fallback';
 
     if (n.field === 'seo_title') {
-      const d = drafts[p.id]?.seoTitle?.trim();
+      const raw = drafts[p.id]?.seoTitle?.trim();
+      const d = raw ? stripBrand(raw, brand) : null;
       if (d && validateSeoTitle(d)) { value = d; source = 'ai'; }
       else value = fallbackTitle(p.title, brand);
+      // Missing SEO title → Shopify already renders the product title; a
+      // proposal identical to it changes nothing.
+      if (n.reason === 'missing' && norm(value) === norm(p.title)) continue;
     } else if (n.field === 'seo_description') {
       const raw = drafts[p.id]?.seoDescription?.trim();
       const d = raw ? fitDescription(raw) : null;
@@ -84,7 +91,7 @@ export function buildProposals(needs: FixNeed[], products: ProductSnapshot[], dr
       // Draft equals current value (e.g. model echoed an over-long title): use the fallback instead, if it differs.
       if (n.field === 'seo_title') {
         const fb = fallbackTitle(p.title, brand);
-        if (fb !== (n.currentValue ?? '').trim()) { value = fb; source = 'fallback'; } else continue;
+        if (fb !== (n.currentValue ?? '').trim() && fb.length <= 60) { value = fb; source = 'fallback'; } else continue;
       } else continue;
     }
 
@@ -134,7 +141,7 @@ export async function draftSeoCopy(products: ProductSnapshot[], brand: string): 
             {
               role: 'system',
               content:
-                `You write Shopify product SEO metadata for the brand "${brand}". Rules: seoTitle 30-60 characters, front-load the product type/keyword, include the brand only if it fits; seoDescription ONE or TWO short sentences, at most 24 words (~150 characters), factual, based ONLY on the provided copy (never invent specs, prices, materials or claims), end with a soft benefit or call to action. No quotes, no emojis, no ALL CAPS.`,
+                `You write Shopify product SEO metadata for the brand "${brand}". Rules: seoTitle 30-55 characters, front-load the product type/keyword, must add search value beyond the product name (use-case, key attribute), and NEVER include the brand name (the theme appends it); seoDescription ONE or TWO short sentences, at most 24 words (~150 characters), factual, based ONLY on the provided copy (never invent specs, prices, materials or claims), end with a soft benefit or call to action. No quotes, no emojis, no ALL CAPS.`,
             },
             { role: 'user', content: `Products:\n${list}\n\nReturn one item per product id.` },
           ],

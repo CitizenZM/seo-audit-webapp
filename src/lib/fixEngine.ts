@@ -67,11 +67,23 @@ export function detectFixNeeds(products: ProductSnapshot[]): FixNeed[] {
 export const validateSeoTitle = (v: string) => v.trim().length >= TITLE_MIN && v.trim().length <= TITLE_MAX;
 export const validateSeoDescription = (v: string) => v.trim().length >= DESC_MIN && v.trim().length <= DESC_MAX;
 
-/** Deterministic title when the AI draft is unavailable/invalid. */
-export function fallbackTitle(productTitle: string, brand: string): string {
-  const withBrand = `${productTitle} | ${brand}`;
-  if (withBrand.length <= TITLE_MAX) return withBrand;
-  return productTitle.length <= TITLE_MAX ? productTitle : `${productTitle.slice(0, TITLE_MAX - 1).trimEnd()}…`;
+/**
+ * Deterministic title when the AI draft is unavailable/invalid. Never adds
+ * the brand: Shopify themes append the shop name to <title> themselves
+ * (live pilot: "… – Dark Fantasy"), so a branded SEO title would duplicate it.
+ */
+export function fallbackTitle(productTitle: string, _brand?: string): string {
+  void _brand;
+  const t = productTitle.replace(/\s+/g, ' ').trim();
+  if (t.length <= TITLE_MAX) return t;
+  const cut = t.slice(0, TITLE_MAX - 1);
+  return `${cut.slice(0, cut.lastIndexOf(' ') > TITLE_MIN ? cut.lastIndexOf(' ') : cut.length).replace(/[\s,;:|–—-]+$/, '')}…`;
+}
+
+/** Remove a trailing "| Brand" / "- Brand" / "– Brand" (themes append the shop name). */
+export function stripBrand(title: string, brand: string): string {
+  const esc = brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return title.replace(new RegExp(`\\s*[|–—:-]\\s*${esc}\\s*$`, 'i'), '').trim();
 }
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', mdash: '—', ndash: '–', hellip: '…', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“' };
