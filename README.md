@@ -1,5 +1,7 @@
 # seo-audit-webapp
 
+> **Archived 2026-11-11.** The Shopify Tier-1 fix engine (verified apply + rollback) now lives in [geo-agent-app-20261103](https://github.com/CitizenZM/geo-agent-app-20261103) under `/ops/<site>/fixes`, and scheduled re-audits run from `universal-geo-agent-20261101/monitor/daily.sh`. The Vercel deployment of this app was left running.
+
 An SEO + GEO (generative engine optimization) audit and implementation platform for affiliate and e-commerce sites. It crawls a site, audits it, probes how AI answer engines cite the brand, turns findings into a prioritized task list, and — for Shopify stores — proposes and applies Tier-1 fixes automatically, with a second check on every write and one-click rollback.
 
 - **Repository:** `CitizenZM/seo-audit-webapp`
